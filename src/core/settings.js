@@ -130,7 +130,7 @@ if (!window.VSC.VideoSpeedConfig) {
       // Migrate from legacy settings if they exist
       keyBindings.push({
         action: 'slower',
-        key: Number(storage.slowerKeyCode) || 83,
+        key: Number(storage.slowerKeyCode) || 90,
         value: Number(storage.speedStep) || 0.1,
         force: false,
         predefined: true,
@@ -138,7 +138,7 @@ if (!window.VSC.VideoSpeedConfig) {
 
       keyBindings.push({
         action: 'faster',
-        key: Number(storage.fasterKeyCode) || 68,
+        key: Number(storage.fasterKeyCode) || 67,
         value: Number(storage.speedStep) || 0.1,
         force: false,
         predefined: true,
@@ -146,23 +146,23 @@ if (!window.VSC.VideoSpeedConfig) {
 
       keyBindings.push({
         action: 'rewind',
-        key: Number(storage.rewindKeyCode) || 90,
-        value: Number(storage.rewindTime) || 10,
+        key: Number(storage.rewindKeyCode) || 69,
+        value: Number(storage.rewindTime) || 30,
         force: false,
         predefined: true,
       });
 
       keyBindings.push({
         action: 'advance',
-        key: Number(storage.advanceKeyCode) || 88,
-        value: Number(storage.advanceTime) || 10,
+        key: Number(storage.advanceKeyCode) || 82,
+        value: Number(storage.advanceTime) || 30,
         force: false,
         predefined: true,
       });
 
       keyBindings.push({
         action: 'reset',
-        key: Number(storage.resetKeyCode) || 82,
+        key: Number(storage.resetKeyCode) || 83,
         value: 1.0,
         force: false,
         predefined: true,
@@ -170,8 +170,24 @@ if (!window.VSC.VideoSpeedConfig) {
 
       keyBindings.push({
         action: 'fast',
-        key: Number(storage.fastKeyCode) || 71,
-        value: Number(storage.fastSpeed) || 1.8,
+        key: Number(storage.fastKeyCode) || 88,
+        value: Number(storage.fastSpeed) || 0.1,
+        force: false,
+        predefined: true,
+      });
+
+      keyBindings.push({
+        action: 'rewind',
+        key: 87, // W key
+        value: 120,
+        force: false,
+        predefined: true,
+      });
+
+      keyBindings.push({
+        action: 'advance',
+        key: 84, // T key
+        value: 120,
         force: false,
         predefined: true,
       });

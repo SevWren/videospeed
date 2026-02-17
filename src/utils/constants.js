@@ -38,12 +38,14 @@ if (!window.VSC.Constants.DEFAULT_SETTINGS) {
     controllerOpacity: 0.3, // default: 0.3
     controllerButtonSize: 14,
     keyBindings: [
-      { action: 'slower', key: 83, value: 0.1, force: false, predefined: true }, // S
-      { action: 'faster', key: 68, value: 0.1, force: false, predefined: true }, // D
-      { action: 'rewind', key: 90, value: 10, force: false, predefined: true }, // Z
-      { action: 'advance', key: 88, value: 10, force: false, predefined: true }, // X
-      { action: 'reset', key: 82, value: 1.0, force: false, predefined: true }, // R
-      { action: 'fast', key: 71, value: 1.8, force: false, predefined: true }, // G
+      { action: 'slower', key: 90, value: 0.1, force: false, predefined: true }, // Z
+      { action: 'faster', key: 67, value: 0.1, force: false, predefined: true }, // C
+      { action: 'fast', key: 88, value: 0.1, force: false, predefined: true }, // X
+      { action: 'rewind', key: 69, value: 30, force: false, predefined: true }, // E
+      { action: 'rewind', key: 87, value: 120, force: false, predefined: true }, // W
+      { action: 'advance', key: 82, value: 30, force: false, predefined: true }, // R
+      { action: 'advance', key: 84, value: 120, force: false, predefined: true }, // T
+      { action: 'reset', key: 83, value: 1.0, force: false, predefined: true }, // S
       { action: 'display', key: 86, value: 0, force: false, predefined: true }, // V
       { action: 'mark', key: 77, value: 0, force: false, predefined: true }, // M
       { action: 'jump', key: 74, value: 0, force: false, predefined: true }, // J

@@ -107,6 +107,16 @@ async function injectSiteSpecificScripts() {
 
 // Set up message bridge between extension popup and injected page
 function setupMessageBridge() {
+  const isExtensionContextInvalidated = (error) => {
+    try {
+      const message = typeof error === 'string' ? error : error?.message;
+      return typeof message === 'string' && message.includes('Extension context invalidated');
+    } catch (innerError) {
+      // Accessing error fields can also fail while the extension context is tearing down.
+      return true;
+    }
+  };
+
   // Fetch and inject user settings into page context
   injectUserSettings();
 
@@ -132,14 +142,21 @@ function setupMessageBridge() {
       // Save to Chrome storage (available in content script context)
       await new Promise((resolve, reject) => {
         chrome.storage.sync.set(event.detail, () => {
-          if (chrome.runtime.lastError) {
-            reject(chrome.runtime.lastError);
-          } else {
+          try {
+            if (chrome.runtime.lastError) {
+              reject(chrome.runtime.lastError);
+              return;
+            }
             resolve();
+          } catch (callbackError) {
+            reject(callbackError);
           }
         });
       });
     } catch (error) {
+      if (isExtensionContextInvalidated(error)) {
+        return;
+      }
       console.error('❌ Failed to save settings to Chrome storage:', error);
     }
   });
@@ -157,13 +174,8 @@ function setupMessageBridge() {
       }
     } catch (error) {
       // Silently ignore extension context invalidation errors
-      try {
-        if (!error.message?.includes('Extension context invalidated')) {
-          console.warn('Failed to send controller created message:', error);
-        }
-      } catch (innerError) {
-        // Even accessing error.message can fail when context is invalidated
-        // Silently ignore all errors during extension reloads
+      if (!isExtensionContextInvalidated(error)) {
+        console.warn('Failed to send controller created message:', error);
       }
     }
   });
@@ -180,13 +192,8 @@ function setupMessageBridge() {
       }
     } catch (error) {
       // Silently ignore extension context invalidation errors
-      try {
-        if (!error.message?.includes('Extension context invalidated')) {
-          console.warn('Failed to send controller removed message:', error);
-        }
-      } catch (innerError) {
-        // Even accessing error.message can fail when context is invalidated
-        // Silently ignore all errors during extension reloads
+      if (!isExtensionContextInvalidated(error)) {
+        console.warn('Failed to send controller removed message:', error);
       }
     }
   });

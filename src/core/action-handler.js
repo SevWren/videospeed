@@ -12,6 +12,79 @@ class ActionHandler {
   }
 
   /**
+   * Log targeted diagnostics for a key while debugging live shortcut failures.
+   * @param {Event} event - Triggering event
+   * @returns {boolean} True when diagnostics should be logged
+   * @private
+   */
+  shouldLogKeyBindingDiagnostic(event) {
+    const keyCode = Number(event?.keyCode || event?.which);
+    const key = typeof event?.key === 'string' ? event.key.toUpperCase() : '';
+    const code = typeof event?.code === 'string' ? event.code : '';
+
+    return (
+      keyCode === 82 ||
+      keyCode === 84 ||
+      key === 'R' ||
+      key === 'T' ||
+      code === 'KeyR' ||
+      code === 'KeyT'
+    );
+  }
+
+  /**
+   * Write keybinding diagnostics directly to the console so they are visible
+   * regardless of the configured extension log level.
+   * @param {string} stage - Diagnostic stage label
+   * @param {Object} details - Diagnostic payload
+   * @private
+   */
+  logKeyBindingDiagnostic(stage, details = {}) {
+    const payload = {
+      stage,
+      timestamp: new Date().toISOString(),
+      source: 'page',
+      details,
+    };
+
+    window.VSC.keyBindingDiagnostics = window.VSC.keyBindingDiagnostics || [];
+    window.VSC.keyBindingDiagnostics.push(payload);
+
+    if (window.VSC.keyBindingDiagnostics.length > 50) {
+      window.VSC.keyBindingDiagnostics.shift();
+    }
+
+    console.warn(`[VSC keybinding diagnostic] ${stage}`, details);
+
+    window.dispatchEvent(
+      new CustomEvent('VSC_KEYBINDING_DIAGNOSTIC', {
+        detail: payload,
+      })
+    );
+  }
+
+  /**
+   * Create a compact, console-friendly media summary.
+   * @param {HTMLMediaElement} media - Media element to summarize
+   * @param {number} index - Media index
+   * @returns {Object} Media summary
+   * @private
+   */
+  summarizeMediaElement(media, index) {
+    return {
+      index,
+      tagName: media.tagName,
+      currentTime: media.currentTime,
+      duration: media.duration,
+      playbackRate: media.playbackRate,
+      paused: media.paused,
+      hasController: Boolean(media.vsc?.div),
+      cancelled: Boolean(media.classList?.contains('vsc-cancelled')),
+      currentSrc: media.currentSrc || media.src || '',
+    };
+  }
+
+  /**
    * Execute an action on media elements
    * @param {string} action - Action to perform
    * @param {*} value - Action value
@@ -21,6 +94,16 @@ class ActionHandler {
     window.VSC.logger.debug(`runAction Begin: ${action}`);
 
     const mediaTags = this.config.getMediaElements();
+    const logDiagnostic = this.shouldLogKeyBindingDiagnostic(e);
+
+    if (logDiagnostic) {
+      this.logKeyBindingDiagnostic('runAction entered', {
+        action,
+        value,
+        mediaCount: mediaTags.length,
+        media: mediaTags.map((media, index) => this.summarizeMediaElement(media, index)),
+      });
+    }
 
     // Get the controller that was used if called from a button press event
     let targetController = null;
@@ -28,23 +111,49 @@ class ActionHandler {
       targetController = e.target.getRootNode().host;
     }
 
-    mediaTags.forEach((v) => {
+    mediaTags.forEach((v, index) => {
       const controller = v.vsc?.div;
 
       if (!controller) {
+        if (logDiagnostic) {
+          this.logKeyBindingDiagnostic('media skipped because it has no controller', {
+            media: this.summarizeMediaElement(v, index),
+          });
+        }
         return;
       }
 
       // Don't change video speed if the video has a different controller
       // Only apply this check for button clicks (when targetController is set)
       if (e && targetController && !(targetController === controller)) {
+        if (logDiagnostic) {
+          this.logKeyBindingDiagnostic(
+            'media skipped because event target has another controller',
+            {
+              media: this.summarizeMediaElement(v, index),
+            }
+          );
+        }
         return;
       }
 
       this.eventManager.showController(controller);
 
       if (!v.classList.contains('vsc-cancelled')) {
+        const before = this.summarizeMediaElement(v, index);
         this.executeAction(action, value, v, e);
+        if (logDiagnostic) {
+          this.logKeyBindingDiagnostic('media action completed', {
+            action,
+            value,
+            before,
+            after: this.summarizeMediaElement(v, index),
+          });
+        }
+      } else if (logDiagnostic) {
+        this.logKeyBindingDiagnostic('media skipped because it is vsc-cancelled', {
+          media: this.summarizeMediaElement(v, index),
+        });
       }
     });
 

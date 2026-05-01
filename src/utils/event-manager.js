@@ -18,6 +18,97 @@ class EventManager {
   }
 
   /**
+   * Log targeted diagnostics for a key while debugging live shortcut failures.
+   * @param {KeyboardEvent} event - Keyboard event
+   * @returns {boolean} True when diagnostics should be logged
+   * @private
+   */
+  shouldLogKeyBindingDiagnostic(event) {
+    const keyCode = Number(event.keyCode || event.which);
+    const key = typeof event.key === 'string' ? event.key.toUpperCase() : '';
+    const code = typeof event.code === 'string' ? event.code : '';
+
+    return (
+      keyCode === 82 ||
+      keyCode === 84 ||
+      key === 'R' ||
+      key === 'T' ||
+      code === 'KeyR' ||
+      code === 'KeyT'
+    );
+  }
+
+  /**
+   * Write keybinding diagnostics directly to the console so they are visible
+   * regardless of the configured extension log level.
+   * @param {string} stage - Diagnostic stage label
+   * @param {Object} details - Diagnostic payload
+   * @private
+   */
+  logKeyBindingDiagnostic(stage, details = {}) {
+    const payload = {
+      stage,
+      timestamp: new Date().toISOString(),
+      source: 'page',
+      details,
+    };
+
+    window.VSC.keyBindingDiagnostics = window.VSC.keyBindingDiagnostics || [];
+    window.VSC.keyBindingDiagnostics.push(payload);
+
+    if (window.VSC.keyBindingDiagnostics.length > 50) {
+      window.VSC.keyBindingDiagnostics.shift();
+    }
+
+    console.warn(`[VSC keybinding diagnostic] ${stage}`, details);
+
+    window.dispatchEvent(
+      new CustomEvent('VSC_KEYBINDING_DIAGNOSTIC', {
+        detail: payload,
+      })
+    );
+  }
+
+  /**
+   * Create a compact, console-friendly element summary.
+   * @param {Element} element - DOM element to summarize
+   * @returns {Object|null} Element summary
+   * @private
+   */
+  summarizeElement(element) {
+    if (!element) {
+      return null;
+    }
+
+    return {
+      nodeName: element.nodeName,
+      id: element.id || '',
+      className: typeof element.className === 'string' ? element.className : '',
+      isContentEditable: Boolean(element.isContentEditable),
+    };
+  }
+
+  /**
+   * Summarize bindings that matter for a keypress investigation.
+   * @param {number} keyCode - Numeric keyboard event code
+   * @returns {Object} Binding summary
+   * @private
+   */
+  getKeyBindingDiagnosticSummary(keyCode) {
+    const loadedBindings = this.config.settings.keyBindings || [];
+    const defaultBindings = window.VSC.Constants.DEFAULT_SETTINGS.keyBindings || [];
+
+    return {
+      keyCode,
+      loadedKeyBindingsCount: loadedBindings.length,
+      loadedBindingsForKey: loadedBindings.filter((item) => item.key === keyCode),
+      loadedAdvanceBindings: loadedBindings.filter((item) => item.action === 'advance'),
+      defaultBindingsForKey: defaultBindings.filter((item) => item.key === keyCode),
+      defaultAdvanceBindings: defaultBindings.filter((item) => item.action === 'advance'),
+    };
+  }
+
+  /**
    * Set up all event listeners
    * @param {Document} document - Document to attach events to
    */
@@ -64,6 +155,24 @@ class EventManager {
    */
   handleKeydown(event) {
     const keyCode = event.keyCode;
+    const logDiagnostic = this.shouldLogKeyBindingDiagnostic(event);
+
+    if (logDiagnostic) {
+      this.logKeyBindingDiagnostic('keydown received', {
+        key: event.key,
+        code: event.code,
+        keyCode,
+        which: event.which,
+        type: event.type,
+        repeat: event.repeat,
+        isTrusted: event.isTrusted,
+        defaultPrevented: event.defaultPrevented,
+        eventPhase: event.eventPhase,
+        target: this.summarizeElement(event.target),
+        activeElement: this.summarizeElement(document.activeElement),
+        ...this.getKeyBindingDiagnosticSummary(keyCode),
+      });
+    }
 
     window.VSC.logger.verbose(`Processing keydown event: key=${event.key}, keyCode=${keyCode}`);
 
@@ -71,6 +180,12 @@ class EventManager {
     const eventSignature = `${keyCode}_${event.timeStamp}_${event.type}`;
 
     if (this.lastKeyEventSignature === eventSignature) {
+      if (logDiagnostic) {
+        this.logKeyBindingDiagnostic('ignored as duplicate keydown event', {
+          eventSignature,
+          lastKeyEventSignature: this.lastKeyEventSignature,
+        });
+      }
       return;
     }
 
@@ -78,17 +193,38 @@ class EventManager {
 
     // Ignore if following modifier is active
     if (this.hasActiveModifier(event)) {
+      if (logDiagnostic) {
+        this.logKeyBindingDiagnostic('ignored because a modifier key is active', {
+          alt: event.getModifierState && event.getModifierState('Alt'),
+          control: event.getModifierState && event.getModifierState('Control'),
+          fn: event.getModifierState && event.getModifierState('Fn'),
+          meta: event.getModifierState && event.getModifierState('Meta'),
+          hyper: event.getModifierState && event.getModifierState('Hyper'),
+          os: event.getModifierState && event.getModifierState('OS'),
+        });
+      }
       window.VSC.logger.debug(`Keydown event ignored due to active modifier: ${keyCode}`);
       return;
     }
 
     // Ignore keydown event if typing in an input box
     if (this.isTypingContext(event.target)) {
+      if (logDiagnostic) {
+        this.logKeyBindingDiagnostic('ignored because target is a typing context', {
+          target: this.summarizeElement(event.target),
+        });
+      }
       return false;
     }
 
     // Ignore keydown event if no media elements are present
-    if (!this.config.getMediaElements().length) {
+    const mediaElements = this.config.getMediaElements();
+    if (!mediaElements.length) {
+      if (logDiagnostic) {
+        this.logKeyBindingDiagnostic('ignored because no media elements are tracked', {
+          mediaCount: mediaElements.length,
+        });
+      }
       return false;
     }
 
@@ -96,14 +232,37 @@ class EventManager {
     const keyBinding = this.config.settings.keyBindings.find((item) => item.key === keyCode);
 
     if (keyBinding) {
+      if (logDiagnostic) {
+        this.logKeyBindingDiagnostic('matched loaded key binding and dispatching action', {
+          keyBinding,
+          mediaCount: mediaElements.length,
+        });
+      }
+
       this.actionHandler.runAction(keyBinding.action, keyBinding.value, event);
 
       if (keyBinding.force === true || keyBinding.force === 'true') {
+        if (logDiagnostic) {
+          this.logKeyBindingDiagnostic('preventing page shortcut because binding is forced', {
+            keyBinding,
+          });
+        }
+
         // Disable website's key bindings
         event.preventDefault();
         event.stopPropagation();
       }
     } else {
+      if (logDiagnostic) {
+        this.logKeyBindingDiagnostic('no loaded key binding matched this keyCode', {
+          ...this.getKeyBindingDiagnosticSummary(keyCode),
+          probableCause: [
+            'The live extension is using chrome.storage keyBindings',
+            'that do not contain keyCode 84.',
+          ].join(' '),
+        });
+      }
+
       window.VSC.logger.verbose(`No key binding found for keyCode: ${keyCode}`);
     }
 

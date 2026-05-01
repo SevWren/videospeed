@@ -120,6 +120,41 @@ function setupMessageBridge() {
   // Fetch and inject user settings into page context
   injectUserSettings();
 
+  window.addEventListener(
+    'keydown',
+    (event) => {
+      const keyCode = Number(event.keyCode || event.which);
+      const key = typeof event.key === 'string' ? event.key.toUpperCase() : '';
+      const code = typeof event.code === 'string' ? event.code : '';
+      const shouldLog =
+        keyCode === 82 ||
+        keyCode === 84 ||
+        key === 'R' ||
+        key === 'T' ||
+        code === 'KeyR' ||
+        code === 'KeyT';
+
+      if (!shouldLog) {
+        return;
+      }
+
+      chrome.storage.sync.get(null, (storage) => {
+        const keyBindings = Array.isArray(storage.keyBindings) ? storage.keyBindings : [];
+        console.warn('[VSC keybinding diagnostic][content keydown]', {
+          key: event.key,
+          code: event.code,
+          keyCode,
+          which: event.which,
+          target: event.target?.nodeName,
+          defaultPrevented: event.defaultPrevented,
+          storedBindingsForKey: keyBindings.filter((binding) => binding.key === keyCode),
+          storedAdvanceBindings: keyBindings.filter((binding) => binding.action === 'advance'),
+        });
+      });
+    },
+    true
+  );
+
   // Listen for messages from popup (in content script context)
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // Forward message to injected page context
@@ -159,6 +194,11 @@ function setupMessageBridge() {
       }
       console.error('❌ Failed to save settings to Chrome storage:', error);
     }
+  });
+
+  // Mirror page-context diagnostics into the content-script console too.
+  window.addEventListener('VSC_KEYBINDING_DIAGNOSTIC', (event) => {
+    console.warn('[VSC keybinding diagnostic][content bridge]', event.detail);
   });
 
   // Listen for controller lifecycle events from injected page context

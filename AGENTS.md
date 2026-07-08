@@ -39,3 +39,17 @@ Before opening a PR:
 - Include a clear description of behavior change and impacted sites/modules.
 - Link related issue(s) when applicable.
 - Add screenshots or short recordings for popup/options/controller UI changes.
+
+## Agent skills
+
+### Issue tracker
+
+Issues tracked in GitHub Issues via the `gh` CLI; external PRs are not a triage surface. See `docs/ai_generated/issue-tracker.md`.
+
+### Triage labels
+
+Default canonical labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/ai_generated/triage-labels.md`.
+
+### Domain docs
+
+Single-context repo: `CONTEXT.md` at root, ADRs in `docs/ai_generated/adr/`. See `docs/ai_generated/domain.md`.

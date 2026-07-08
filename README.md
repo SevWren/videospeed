@@ -1,35 +1,4 @@
-# The science of accelerated playback
-
-| Chrome Extension                                                       | Downloads                                                                        | GitHub Release                                                 |
-|------------------------------------------------------------------------|----------------------------------------------------------------------------------|----------------------------------------------------------------|
-| [![Chrome Web Store][chrome-web-store-version]][chrome-web-store-link] | [![Chrome Web Store Users][chrome-web-store-users-badge]][chrome-web-store-link] | [![GitHub release][github-release-badge]][github-release-link] |
-
-<!-- Badges -->
-[chrome-web-store-version]: https://img.shields.io/chrome-web-store/v/nffaoalbilbmmfgbnbgppjihopabppdk?label=Chrome%20Web%20Store
-[chrome-web-store-users-badge]: https://img.shields.io/chrome-web-store/users/nffaoalbilbmmfgbnbgppjihopabppdk
-[github-release-badge]: https://img.shields.io/github/v/release/igrigorik/videospeed
-
-<!-- Links -->
-[chrome-web-store-link]: https://chrome.google.com/webstore/detail/poe2-trade-butler/nffaoalbilbmmfgbnbgppjihopabppdk
-[github-release-link]: https://github.com/igrigorik/videospeed/releases
-
-**TL;DR: faster playback translates to better engagement and retention.**
-
-The average adult reads prose text at
-[250 to 300 words per minute](http://www.paperbecause.com/PIOP/files/f7/f7bb6bc5-2c4a-466f-9ae7-b483a2c0dca4.pdf)
-(wpm). By contrast, the average rate of speech for English speakers is ~150 wpm,
-with slide presentations often closer to 100 wpm. As a result, when given the
-choice, many viewers
-[speed up video playback to ~1.3\~1.5 its recorded rate](http://research.microsoft.com/en-us/um/redmond/groups/coet/compression/chi99/paper.pdf)
-to compensate for the difference.
-
-Many viewers report that
-[accelerated viewing keeps their attention longer](http://www.enounce.com/docs/BYUPaper020319.pdf):
-faster delivery keeps the viewer more engaged with the content. In fact, with a
-little training many end up watching videos at 2x+ the recorded speed. Some
-studies report that after being exposed to accelerated playback,
-[listeners become uncomfortable](http://alumni.media.mit.edu/~barons/html/avios92.html#beasleyalteredspeech)
-if they are forced to return to normal rate of presentation.
+# Local Customization
 
 ## Faster HTML5 Video
 
@@ -42,7 +11,6 @@ last point to listen to it a few more times.
 
 ![Player](https://cloud.githubusercontent.com/assets/2400185/24076745/5723e6ae-0c41-11e7-820c-1d8e814a2888.png)
 
-### _[Install Chrome Extension](https://chrome.google.com/webstore/detail/video-speed-controller/nffaoalbilbmmfgbnbgppjihopabppdk)_
 
 \*\* Once the extension is installed simply navigate to any page that offers
 HTML5 video ([example](http://www.youtube.com/watch?v=E9FxNzv1Tr8)), and you'll

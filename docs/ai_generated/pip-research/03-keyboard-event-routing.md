@@ -203,3 +203,28 @@ Source: WICG Document PiP issue #146 — [https://github.com/WICG/document-pictu
 | Chromium source: VideoOverlayWindowViews::OnKeyEvent | https://chromium.googlesource.com/chromium/src/+/refs/heads/main/chrome/browser/ui/views/overlay/video_overlay_window_views.cc |
 | Chromium source: PiP window manager | https://chromium.googlesource.com/chromium/src/+/refs/heads/main/chrome/browser/picture_in_picture/picture_in_picture_window_manager.h |
 | Chromium source: Content-layer PiP directory | https://chromium.googlesource.com/chromium/src/+/refs/heads/main/content/browser/picture_in_picture/ |
+
+---
+
+## Live Site Verification — kwik.cx / animepahe.pw (2026-07-08)
+
+### Architecture discovered
+
+- **animepahe.pw** embeds the player in a cross-origin iframe: `https://kwik.cx/e/<id>`
+- The actual `<video>` element lives at `blob:https://kwik.cx/...` inside that iframe
+- The player is **Plyr** (`plyr.min.js`) with HLS.js for adaptive streaming
+- Plyr detects `requestPictureInPicture` support and sets `plyr--pip-supported` class
+- The PiP button is `<button data-plyr="pip">` — Plyr calls `video.requestPictureInPicture()` = **LEGACY PiP**
+
+### VSC injection status
+
+VSC **is** injected into the kwik.cx frame (all `chrome-extension://` content scripts appear in the frame's script list). VSC can see and control the video element. The failure is exclusively keyboard event routing once PiP activates.
+
+### Confirmed failure path
+
+1. User clicks Plyr PiP button → `video.requestPictureInPicture()` called
+2. Chromium moves video rendering to OS-level `VideoOverlayWindowViews` widget
+3. OS keyboard focus transfers to that native widget
+4. All `keydown` events are consumed by `VideoOverlayWindowViews::OnKeyEvent`
+5. Events never enter the kwik.cx renderer process
+6. VSC's `document.addEventListener('keydown')` inside kwik.cx frame = never fires

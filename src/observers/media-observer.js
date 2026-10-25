@@ -255,9 +255,15 @@ class MediaElementObserver {
       if (!window.VSC.GifObserver.isGifElement(img)) {
         return false;
       }
-      const w = img.naturalWidth || img.width || 0;
-      const h = img.naturalHeight || img.height || 0;
-      return w >= window.VSC.Constants.GIF_MIN_SIZE_PX && h >= window.VSC.Constants.GIF_MIN_SIZE_PX;
+      // Only apply size filter when image has loaded (naturalWidth > 0).
+      // naturalWidth = 0 means the image hasn't decoded yet — allow it through
+      // so the GIF controller can attach; tiny tracker pixels are excluded once loaded.
+      if (img.naturalWidth > 0 || img.naturalHeight > 0) {
+        const w = img.naturalWidth || img.width || 0;
+        const h = img.naturalHeight || img.height || 0;
+        return w >= window.VSC.Constants.GIF_MIN_SIZE_PX && h >= window.VSC.Constants.GIF_MIN_SIZE_PX;
+      }
+      return true;
     });
   }
 

@@ -33,7 +33,7 @@ class VideoMutationObserver {
     });
 
     const observerOptions = {
-      attributeFilter: ['aria-hidden', 'data-focus-method', 'style', 'class'],
+      attributeFilter: ['aria-hidden', 'data-focus-method', 'style', 'class', 'src'],
       childList: true,
       subtree: true,
     };
@@ -99,6 +99,20 @@ class VideoMutationObserver {
    * @private
    */
   processAttributeMutation(mutation) {
+    // Handle src changes on IMG elements — catches lazy-loaded GIFs
+    if (mutation.attributeName === 'src' && mutation.target.nodeName === 'IMG') {
+      const node = mutation.target;
+      if (
+        !node.gifController &&
+        !node.vscGifIgnore &&
+        this.onGifFound &&
+        window.VSC.GifObserver?.isGifElement(node)
+      ) {
+        this.onGifFound(node, node.parentNode || mutation.target);
+      }
+      return;
+    }
+
     // Handle style and class changes that might affect video visibility
     if (mutation.attributeName === 'style' || mutation.attributeName === 'class') {
       this.handleVisibilityChanges(mutation.target);
@@ -280,7 +294,7 @@ class VideoMutationObserver {
     });
 
     const observerOptions = {
-      attributeFilter: ['aria-hidden', 'data-focus-method'],
+      attributeFilter: ['aria-hidden', 'data-focus-method', 'src'],
       childList: true,
       subtree: true,
     };

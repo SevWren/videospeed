@@ -48,7 +48,15 @@ if (!window.VSC.GifController) {
           return null;
         }
 
-        const src = imgElement.currentSrc || imgElement.src || '';
+        // Prefer the URL that actually ends in .gif. currentSrc may be a WebP
+        // chosen by the browser from a <picture><source type="image/webp"> element.
+        const isGifSrc = window.VSC.GifObserver?.isGifSrc;
+        const src =
+          (isGifSrc && isGifSrc(imgElement.src) ? imgElement.src : null) ||
+          (isGifSrc && isGifSrc(imgElement.currentSrc) ? imgElement.currentSrc : null) ||
+          imgElement.src ||
+          imgElement.currentSrc ||
+          '';
         if (!src) {
           return null;
         }

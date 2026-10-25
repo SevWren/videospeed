@@ -546,6 +546,35 @@ window.addEventListener('VSC_MESSAGE', (event) => {
           extension.actionHandler.runAction('display', null, null);
         }
         break;
+
+      case window.VSC.Constants.MESSAGE_TYPES.DISABLE_GIF_CONTROL:
+        if (extension.config) {
+          extension.config.settings.controlGifs = false;
+          (extension.config.getGifElements?.() || []).slice().forEach((img) => {
+            try {
+              if (img.gifController && typeof img.gifController.remove === 'function') {
+                img.gifController.remove();
+              }
+            } catch (_e) {}
+          });
+        }
+        break;
+
+      case window.VSC.Constants.MESSAGE_TYPES.ENABLE_GIF_CONTROL:
+        if (extension.config) {
+          extension.config.settings.controlGifs = true;
+        }
+        if (extension.mediaObserver && extension.config) {
+          const gifImgs = extension.mediaObserver.scanForGifs
+            ? extension.mediaObserver.scanForGifs(document)
+            : [];
+          gifImgs.forEach((img) => {
+            if (!img.gifController) {
+              extension.onGifFound(img, img.parentElement || img.parentNode);
+            }
+          });
+        }
+        break;
     }
   }
 });

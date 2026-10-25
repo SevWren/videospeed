@@ -100,20 +100,23 @@ class VideoMutationObserver {
    */
   processAttributeMutation(mutation) {
     // Handle src changes on IMG elements — catches lazy-loaded GIFs
-    if (mutation.attributeName === 'src' && mutation.target.nodeName === 'IMG') {
-      const node = mutation.target;
-      if (
-        !node.gifController &&
-        !node.vscGifIgnore &&
-        this.onGifFound &&
-        window.VSC.GifObserver?.isGifElement(node)
-      ) {
-        this.onGifFound(node, node.parentNode || mutation.target);
-      } else if (node.gifController && node.gifController.pending !== true && this.onGifRemoved && !window.VSC.GifObserver?.isGifElement(node)) {
-        this.onGifRemoved(node);
+      if (mutation.attributeName === 'src' && mutation.target.nodeName === 'IMG') {
+        const node = mutation.target;
+        const srcChangedSinceTeardown =
+          node._vscTeardownSrc !== undefined && node.src !== node._vscTeardownSrc;
+        const suppressedByIgnore = node.vscGifIgnore && !srcChangedSinceTeardown;
+        if (
+          !node.gifController &&
+          !suppressedByIgnore &&
+          this.onGifFound &&
+          window.VSC.GifObserver?.isGifElement(node)
+        ) {
+          this.onGifFound(node, node.parentNode || mutation.target);
+        } else if (node.gifController && node.gifController.pending !== true && this.onGifRemoved && !window.VSC.GifObserver?.isGifElement(node)) {
+          this.onGifRemoved(node);
+        }
+        return;
       }
-      return;
-    }
 
     // Handle style and class changes that might affect video visibility
     if (mutation.attributeName === 'style' || mutation.attributeName === 'class') {

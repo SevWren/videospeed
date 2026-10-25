@@ -614,7 +614,7 @@ if (!window.VSC.GifController) {
           // For <picture> elements, observe the <picture> parent for source changes
           this._targetObserver.observe(this._img.parentElement || this._img, {
             attributes: true,
-            attributeFilter: ['src'],
+            attributeFilter: ['src', 'srcset'],
             subtree: true,
           });
         } else {

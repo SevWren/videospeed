@@ -352,12 +352,11 @@ if (!window.VSC.GifController) {
       }
 
       const rawElapsed = timestamp - this._lastFrameTime;
-      const clampedElapsed = Math.min(rawElapsed, 100); // cap prevents burst after backgrounding
 
       const frame = this._frames[this._frameIdx];
       const effectiveDelay = window.VSC.GifFrameEngine.effectiveDelay(frame.delay, this._speed);
 
-      if (clampedElapsed >= effectiveDelay) {
+      if (rawElapsed >= effectiveDelay) {
         this._drawFrame(this._frameIdx);
         this._frameIdx = (this._frameIdx + 1) % this._frames.length;
         this._framesDrawn++;
@@ -367,7 +366,9 @@ if (!window.VSC.GifController) {
           return; // finite loop complete; final frame remains visible
         }
 
-        this._lastFrameTime = timestamp - (clampedElapsed - effectiveDelay);
+        // Cap overshoot to one effectiveDelay to prevent burst playback after tab backgrounding
+        const overshoot = rawElapsed - effectiveDelay;
+        this._lastFrameTime = timestamp - Math.min(overshoot, effectiveDelay);
       }
 
       // If _stopRafLoop was called during this tick, _rafId was set to null — honor it
@@ -450,6 +451,9 @@ if (!window.VSC.GifController) {
             window.VSC.Constants.SPEED_LIMITS.MAX
           );
           this.setSpeed(newSpeed);
+          if (this._actionHandler && typeof this._actionHandler._saveGifSpeedDebounced === 'function') {
+            this._actionHandler._saveGifSpeedDebounced(newSpeed);
+          }
         });
       } catch (err) {
         window.VSC.logger.error(`GifController._initializeControls failed: ${err.message}`);

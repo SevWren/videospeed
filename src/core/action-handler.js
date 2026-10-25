@@ -194,7 +194,7 @@ class ActionHandler {
       if (e && targetController && targetController !== gc.div) {
         return;
       }
-      const showActions = ['faster', 'slower', 'reset', 'fast', 'pause', 'display', 'blink'];
+      const showActions = ['faster', 'slower', 'reset', 'fast', 'pause', 'display'];
       if (showActions.includes(action)) {
         this.eventManager.showController(gc.div);
       }
@@ -216,7 +216,7 @@ class ActionHandler {
           window.VSC.Constants.SPEED_LIMITS.MAX
         );
         gc.setSpeed(newSpeed);
-        this._saveGifSpeedDebounced(gc._speed);
+        this._saveGifSpeedDebounced(newSpeed);
         break;
       }
       case 'slower': {
@@ -225,7 +225,7 @@ class ActionHandler {
           window.VSC.Constants.SPEED_LIMITS.MIN
         );
         gc.setSpeed(newSpeed);
-        this._saveGifSpeedDebounced(gc._speed);
+        this._saveGifSpeedDebounced(newSpeed);
         break;
       }
       case 'reset':

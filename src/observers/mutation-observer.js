@@ -218,7 +218,11 @@ class VideoMutationObserver {
           if (added && !node.vscGifIgnore) {
             this.onGifFound(node, parent);
           } else if (!added) {
-            if (node.gifController && typeof node.gifController.remove === 'function') {
+            if (
+              this.onGifRemoved &&
+              node.gifController &&
+              typeof node.gifController.remove === 'function'
+            ) {
               this.onGifRemoved(node);
             }
           }

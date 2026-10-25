@@ -289,8 +289,10 @@ async function save_options() {
     var controllerButtonSize = Number(document.getElementById("controllerButtonSize").value);
     var logLevel = parseInt(document.getElementById("logLevel").value);
     var blacklist = document.getElementById("blacklist").value;
-    const controlGifs = document.getElementById('controlGifs').checked;
-    const gifSpeedStep = parseFloat(document.getElementById('gifSpeedStep').value) || 0.1;
+    const controlGifsEl = document.getElementById('controlGifs');
+    const gifSpeedStepEl = document.getElementById('gifSpeedStep');
+    const controlGifs = controlGifsEl ? controlGifsEl.checked : true;
+    const gifSpeedStep = gifSpeedStepEl ? (parseFloat(gifSpeedStepEl.value) || 0.1) : 0.1;
 
     // Clean up legacy keys
     await chrome.storage.sync.remove([
@@ -376,10 +378,10 @@ async function restore_options() {
     document.getElementById("controllerButtonSize").value = storage.controllerButtonSize;
     document.getElementById("logLevel").value = storage.logLevel;
     document.getElementById("blacklist").value = storage.blacklist;
-    document.getElementById('controlGifs').checked = storage.controlGifs !== false;
-    document.getElementById('gifSpeedStep').value =
-      (typeof storage.gifSpeedStep === 'number' && storage.gifSpeedStep > 0)
-        ? storage.gifSpeedStep.toFixed(2) : '0.10';
+    const controlGifsInput = document.getElementById('controlGifs');
+    if (controlGifsInput) controlGifsInput.checked = storage.controlGifs !== false;
+    const gifSpeedStepInput = document.getElementById('gifSpeedStep');
+    if (gifSpeedStepInput) gifSpeedStepInput.value = (typeof storage.gifSpeedStep === 'number' && storage.gifSpeedStep > 0) ? storage.gifSpeedStep.toFixed(2) : '0.10';
 
     // Process key bindings
     const keyBindings = storage.keyBindings || window.VSC.Constants.DEFAULT_SETTINGS.keyBindings;

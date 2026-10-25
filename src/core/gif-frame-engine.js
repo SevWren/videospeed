@@ -31,8 +31,9 @@ if (!window.VSC.GifFrameEngine) {
      * @returns {number} Effective delay in ms
      */
     static effectiveDelay(rawDelayMs, speed) {
+      const safeSpeed = speed > 0 ? speed : 1.0;
       const base = rawDelayMs < 10 ? 10 : rawDelayMs;
-      return Math.max(10, Math.round(base / speed));
+      return Math.max(10, Math.round(base / safeSpeed));
     }
   }
 

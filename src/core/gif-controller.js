@@ -159,6 +159,9 @@ if (!window.VSC.GifController) {
 
         gc._canvas = canvas;
         gc._visibleCtx = canvas.getContext('2d');
+        if (!gc._visibleCtx) {
+          return null;
+        } // Canvas 2D not available (CSP restriction)
 
         // Create offscreen composite canvas
         const compCanvas = document.createElement('canvas');
@@ -166,6 +169,9 @@ if (!window.VSC.GifController) {
         compCanvas.height = gc._gifHeight;
         gc._compositeCanvas = compCanvas;
         gc._compositeCtx = compCanvas.getContext('2d');
+        if (!gc._compositeCtx) {
+          return null;
+        } // Canvas 2D not available (CSP restriction)
 
         // DOM insertion
         const isPicture =
@@ -275,7 +281,7 @@ if (!window.VSC.GifController) {
       const frame = this._frames[frameIndex];
 
       // Apply the previous frame's disposal before drawing the current frame.
-      if (frameIndex > 0 || this._loopCount > 0) {
+      if (frameIndex > 0 || this._framesDrawn >= this._frames.length) {
         const prevIndex = frameIndex === 0 ? this._frames.length - 1 : frameIndex - 1;
         const prev = this._frames[prevIndex];
         if (prev.disposalType === 2) {
@@ -359,7 +365,10 @@ if (!window.VSC.GifController) {
         this._lastFrameTime = timestamp - (clampedElapsed - effectiveDelay);
       }
 
-      this._rafId = requestAnimationFrame((ts) => this._tick(ts));
+      // If _stopRafLoop was called during this tick, _rafId was set to null — honor it
+      if (this._rafId !== null) {
+        this._rafId = requestAnimationFrame((ts) => this._tick(ts));
+      }
     }
 
     _startRafLoop() {
@@ -535,6 +544,9 @@ if (!window.VSC.GifController) {
         this._frames = null;
         this._savedPixels = null;
         this._rawBuffer = null;
+        this._visibleCtx = null;
+        this._compositeCtx = null;
+        this._compositeCanvas = null;
         // 6. Release memory budget
         if (this._allocatedBytes > 0) {
           window.VSC.GifFrameCache.releaseAllocation(this._allocatedBytes);
@@ -562,10 +574,7 @@ if (!window.VSC.GifController) {
         }
         // 9. Remove position wrapper if present
         if (this._positionWrapper && this._positionWrapper.parentNode) {
-          this._positionWrapper.parentNode.insertBefore(
-            this._canvas || this._img,
-            this._positionWrapper
-          );
+          this._positionWrapper.parentNode.insertBefore(this._img, this._positionWrapper);
           this._positionWrapper.parentNode.removeChild(this._positionWrapper);
           this._positionWrapper = null;
         }

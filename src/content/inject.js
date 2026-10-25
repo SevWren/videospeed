@@ -411,11 +411,13 @@ class VideoSpeedExtension {
       this.siteHandlerManager.cleanup();
 
       // Clean up all video controllers
-      this.config.getMediaElements().forEach((video) => {
-        if (video.vsc) {
-          video.vsc.remove();
-        }
-      });
+      if (this.config) {
+        this.config.getMediaElements().forEach((video) => {
+          if (video.vsc) {
+            video.vsc.remove();
+          }
+        });
+      }
 
       // Clean up all GIF controllers
       if (this.config && typeof this.config.getGifElements === 'function') {

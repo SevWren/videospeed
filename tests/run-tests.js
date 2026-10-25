@@ -118,7 +118,7 @@ if (!global.HTMLElement.prototype.attachShadow) {
 }
 
 // Canvas 2D context mock for GIF tests
-if (dom.window.HTMLCanvasElement && !dom.window.HTMLCanvasElement.prototype.getContext) {
+if (dom.window.HTMLCanvasElement) {
   dom.window.HTMLCanvasElement.prototype.getContext = function (_type) {
     return {
       putImageData: () => {},
@@ -131,7 +131,9 @@ if (dom.window.HTMLCanvasElement && !dom.window.HTMLCanvasElement.prototype.getC
   };
 }
 global.HTMLCanvasElement = dom.window.HTMLCanvasElement;
-if (!global.fetch) { global.fetch = async () => null; }
+if (!global.fetch) {
+  global.fetch = async () => ({ ok: false, status: 0, headers: { get: () => null }, arrayBuffer: async () => new ArrayBuffer(0) });
+}
 if (!global.requestAnimationFrame) {
   const _rafQueue = [];
   global.requestAnimationFrame = (fn) => { _rafQueue.push(fn); return _rafQueue.length; };

@@ -329,23 +329,50 @@ if (!window.VSC.GifController) {
         // file:// responses also carry no Content-Type header, so skip that check.
         if (src.startsWith('file://')) {
           return new Promise((resolve) => {
-            const xhr = new XMLHttpRequest();
-            xhr.open('GET', src, true);
-            xhr.responseType = 'arraybuffer';
-            xhr.onload = () => {
-              // file:// XHR returns status 0 on success (no HTTP status codes)
-              if (xhr.status === 0 || (xhr.status >= 200 && xhr.status < 300)) {
-                resolve(xhr.response);
-              } else {
-                window.VSC.logger.debug(`Local GIF XHR non-success status ${xhr.status} for ${src}`);
+            try {
+              const xhr = new XMLHttpRequest();
+              xhr.open('GET', src, true);
+              xhr.responseType = 'arraybuffer';
+              // 8-second timeout prevents the Promise from hanging forever when the
+              // path resolves to a network mount, a USB drive that was ejected, or
+              // any other source where local I/O can stall indefinitely.
+              xhr.timeout = 8000;
+              xhr.onload = () => {
+                // file:// XHR returns status 0 on success (no HTTP status codes).
+                if (xhr.status === 0 || (xhr.status >= 200 && xhr.status < 300)) {
+                  if (!xhr.response || xhr.response.byteLength === 0) {
+                    // Nominally-successful load but empty or null response buffer —
+                    // treat as failure rather than passing garbage to gifuct.
+                    window.VSC.logger.debug(`Local GIF XHR returned empty response for ${src}`);
+                    resolve(null);
+                  } else {
+                    resolve(xhr.response);
+                  }
+                } else {
+                  window.VSC.logger.debug(
+                    `Local GIF XHR non-success status ${xhr.status} for ${src}`
+                  );
+                  resolve(null);
+                }
+              };
+              xhr.onerror = () => {
+                window.VSC.logger.warn(
+                  `Local GIF blocked — enable "Allow access to file URLs" in chrome://extensions/ to use GIF speed control on local files (${src})`
+                );
                 resolve(null);
-              }
-            };
-            xhr.onerror = () => {
-              window.VSC.logger.debug(`Local GIF XHR error for ${src} — ensure "Allow access to file URLs" is enabled in chrome://extensions/`);
+              };
+              xhr.ontimeout = () => {
+                window.VSC.logger.debug(
+                  `Local GIF XHR timed out after 8 s — file may be on a slow or disconnected network drive (${src})`
+                );
+                resolve(null);
+              };
+              xhr.send();
+            } catch (xhrErr) {
+              // xhr.open() or xhr.send() threw synchronously (malformed URL, etc.)
+              window.VSC.logger.debug(`Local GIF XHR setup error for ${src}: ${xhrErr.message}`);
               resolve(null);
-            };
-            xhr.send();
+            }
           });
         }
 

@@ -300,26 +300,19 @@ if (!window.VSC.GifController) {
         const prevIndex = frameIndex === 0 ? this._frames.length - 1 : frameIndex - 1;
         const prev = this._frames[prevIndex];
         if (prev.disposalType === 2) {
-          const bgIdx = this._parsed.lsd.backgroundColorIndex;
-          if (this._parsed.gct && bgIdx !== undefined) {
-            const r = this._parsed.gct[bgIdx * 3];
-            const g = this._parsed.gct[bgIdx * 3 + 1];
-            const b = this._parsed.gct[bgIdx * 3 + 2];
-            this._compositeCtx.fillStyle = `rgb(${r},${g},${b})`;
-            this._compositeCtx.fillRect(
-              prev.dims.left,
-              prev.dims.top,
-              prev.dims.width,
-              prev.dims.height
-            );
-          } else {
-            this._compositeCtx.clearRect(
-              prev.dims.left,
-              prev.dims.top,
-              prev.dims.width,
-              prev.dims.height
-            );
-          }
+          // Restore to background. The GIF spec says to use the LSD backgroundColorIndex,
+          // but Chrome/Firefox/Safari all treat disposal=2 as "restore to transparent"
+          // regardless of that index value — virtually every web-optimised GIF relies on
+          // this non-spec convention. Filling with the GCT background colour (often index 0
+          // = black) instead produces opaque-black artifacts wherever the next frame's
+          // transparent pixels leave that filled region exposed (source-over compositing
+          // preserves it instead of overwriting it). Always clear to transparent.
+          this._compositeCtx.clearRect(
+            prev.dims.left,
+            prev.dims.top,
+            prev.dims.width,
+            prev.dims.height
+          );
         } else if (prev.disposalType === 3 && this._savedPixels) {
           this._compositeCtx.putImageData(
             this._savedPixels,

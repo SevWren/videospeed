@@ -20,7 +20,10 @@ class FacebookHandler extends window.VSC.BaseSiteHandler {
    * @param {HTMLElement} video - Video element
    * @returns {Object} Positioning information
    */
-  getControllerPosition(parent, _video) {
+  getControllerPosition(parent, video, options = {}) {
+    if (options.gifMode) {
+      return super.getControllerPosition(parent, video);
+    }
     // Facebook requires deep DOM traversal due to complex nesting
     // This is a monstrosity but new FB design does not have semantic handles
     let targetParent = parent;

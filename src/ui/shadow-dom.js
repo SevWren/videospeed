@@ -13,7 +13,14 @@ class ShadowDOMManager {
    * @returns {ShadowRoot} Created shadow root
    */
   static createShadowDOM(wrapper, options = {}) {
-    const { top = '0px', left = '0px', speed = '1.00', opacity = 0.3, buttonSize = 14 } = options;
+    const {
+      top = '0px',
+      left = '0px',
+      speed = '1.00',
+      opacity = 0.3,
+      buttonSize = 14,
+      isGif = false,
+    } = options;
 
     const shadow = wrapper.attachShadow({ mode: 'open' });
 
@@ -146,10 +153,10 @@ class ShadowDOMManager {
 
     // Create buttons
     const buttons = [
-      { action: 'rewind', text: '«', class: 'rw' },
+      ...(isGif ? [] : [{ action: 'rewind', text: '«', class: 'rw' }]),
       { action: 'slower', text: '−', class: '' },
       { action: 'faster', text: '+', class: '' },
-      { action: 'advance', text: '»', class: 'rw' },
+      ...(isGif ? [] : [{ action: 'advance', text: '»', class: 'rw' }]),
       { action: 'display', text: '×', class: 'hideButton' },
     ];
 

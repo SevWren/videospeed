@@ -24,7 +24,7 @@ class BaseSiteHandler {
    * @param {HTMLElement} video - Video element
    * @returns {Object} Positioning information
    */
-  getControllerPosition(parent, _video) {
+  getControllerPosition(parent, _video, _options = {}) {
     return {
       insertionPoint: parent,
       insertionMethod: 'firstChild', // 'firstChild', 'beforeParent', 'afterParent'

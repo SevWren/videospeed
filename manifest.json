@@ -63,7 +63,8 @@
         "src/ui/*.js",
         "src/observers/*.js",
         "src/site-handlers/*.js",
-        "src/content/*.js"
+        "src/content/*.js",
+        "src/lib/*.js"
       ],
       "matches": [
         "http://*/*",

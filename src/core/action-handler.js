@@ -157,7 +157,120 @@ class ActionHandler {
       }
     });
 
+    // GIF speed control — parallel to video path, errors are isolated
+    try {
+      this.runGifAction(action, value, e);
+    } catch (gifError) {
+      window.VSC.logger.error(`GIF action error (video path unaffected): ${gifError.message}`);
+    }
+
     window.VSC.logger.debug('runAction End');
+  }
+
+  runGifAction(action, value, e) {
+    if (!this.config.settings.controlGifs) {
+      return;
+    }
+    const gifElements = this.config.getGifElements?.();
+    if (!gifElements || !gifElements.length) {
+      return;
+    }
+    let targetController = null;
+    if (e) {
+      try {
+        targetController = e.target.getRootNode().host;
+      } catch (_rootErr) {
+        /* cross-origin shadow root */
+      }
+    }
+    gifElements.forEach((img) => {
+      const gc = img.gifController;
+      if (!gc || typeof gc.setSpeed !== 'function') {
+        return;
+      }
+      if (!gc.div) {
+        return;
+      }
+      if (e && targetController && targetController !== gc.div) {
+        return;
+      }
+      const showActions = ['faster', 'slower', 'reset', 'fast', 'pause', 'display', 'blink'];
+      if (showActions.includes(action)) {
+        this.eventManager.showController(gc.div);
+      }
+      if (!img.classList.contains('vsc-cancelled')) {
+        this.executeGifAction(action, value, img, e);
+      }
+    });
+  }
+
+  executeGifAction(action, value, img, _e) {
+    const gc = img.gifController;
+    if (!gc || gc.fetchFailed || typeof gc.setSpeed !== 'function') {
+      return;
+    }
+    switch (action) {
+      case 'faster': {
+        const newSpeed = Math.min(
+          gc._speed + (value || this.config.settings.gifSpeedStep || 0.1),
+          window.VSC.Constants.SPEED_LIMITS.MAX
+        );
+        gc.setSpeed(newSpeed);
+        this._saveGifSpeedDebounced(gc._speed);
+        break;
+      }
+      case 'slower': {
+        const newSpeed = Math.max(
+          gc._speed - (value || this.config.settings.gifSpeedStep || 0.1),
+          window.VSC.Constants.SPEED_LIMITS.MIN
+        );
+        gc.setSpeed(newSpeed);
+        this._saveGifSpeedDebounced(gc._speed);
+        break;
+      }
+      case 'reset':
+        gc.setSpeed(1.0);
+        this.config.settings.lastGifSpeed = 1.0;
+        this.config.save({ lastGifSpeed: 1.0 });
+        break;
+      case 'fast':
+        gc.setSpeed(typeof value === 'number' ? value : 1.0);
+        break;
+      case 'pause':
+        if (gc._userPaused) {
+          gc.resume();
+        } else {
+          gc.pause();
+        }
+        break;
+      case 'display':
+        gc.div.classList.add('vsc-manual');
+        gc.div.classList.toggle('vsc-hidden');
+        break;
+      case 'blink':
+        this.blinkController(gc.div, value);
+        break;
+      case 'rewind':
+      case 'advance':
+      case 'mark':
+      case 'jump':
+      case 'muted':
+      case 'louder':
+      case 'softer':
+      default:
+        break;
+    }
+  }
+
+  _saveGifSpeedDebounced(speed) {
+    if (this._gifSpeedSaveTimer) {
+      clearTimeout(this._gifSpeedSaveTimer);
+    }
+    this._gifSpeedSaveTimer = setTimeout(() => {
+      this.config.settings.lastGifSpeed = speed;
+      this.config.save({ lastGifSpeed: speed });
+      this._gifSpeedSaveTimer = null;
+    }, window.VSC.Constants.GIF_SPEED_SAVE_DEBOUNCE_MS || 500);
   }
 
   /**

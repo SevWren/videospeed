@@ -25,18 +25,17 @@ class AmazonHandler extends window.VSC.BaseSiteHandler {
    * @param {HTMLElement} video - Video element
    * @returns {Object} Positioning information
    */
-  getControllerPosition(parent, video) {
-    // Only special-case Prime Video, not product-page videos (which use "vjs-tech")
-    // Otherwise the overlay disappears in fullscreen mode
-    if (!video.classList.contains('vjs-tech')) {
-      return {
-        insertionPoint: parent.parentElement,
-        insertionMethod: 'beforeParent',
-        targetParent: parent.parentElement,
-      };
+  getControllerPosition(parent, video, options = {}) {
+    if (options.gifMode) {
+      return super.getControllerPosition(parent, video);
     }
-
-    // Default positioning for product videos
+    if (!video.classList.contains('vjs-tech')) {
+      const insertionPoint = parent.parentElement;
+      if (!insertionPoint || insertionPoint === document.documentElement) {
+        return super.getControllerPosition(parent, video);
+      }
+      return { insertionPoint, insertionMethod: 'beforeParent', targetParent: insertionPoint };
+    }
     return super.getControllerPosition(parent, video);
   }
 

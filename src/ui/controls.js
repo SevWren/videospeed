@@ -16,10 +16,10 @@ class ControlsManager {
    * @param {ShadowRoot} shadow - Shadow root containing controls
    * @param {HTMLVideoElement} video - Associated video element
    */
-  setupControlEvents(shadow, video) {
+  setupControlEvents(shadow, video, onSpeedChange = null) {
     this.setupDragHandler(shadow);
     this.setupButtonHandlers(shadow);
-    this.setupWheelHandler(shadow, video);
+    this.setupWheelHandler(shadow, video, onSpeedChange);
     this.setupClickPrevention(shadow);
   }
 
@@ -80,7 +80,7 @@ class ControlsManager {
    * @param {HTMLVideoElement} video - Video element
    * @private
    */
-  setupWheelHandler(shadow, video) {
+  setupWheelHandler(shadow, video, onSpeedChange) {
     const controller = shadow.querySelector('#controller');
 
     controller.addEventListener(
@@ -91,21 +91,23 @@ class ControlsManager {
         const delta = Math.sign(event.deltaY);
         const step = 0.1;
 
-        let newSpeed = video.playbackRate + (delta < 0 ? step : -step);
-        newSpeed = Math.min(
-          Math.max(newSpeed, window.VSC.Constants.SPEED_LIMITS.MIN),
-          window.VSC.Constants.SPEED_LIMITS.MAX
-        );
-
-        video.playbackRate = newSpeed;
-
-        // Update visual speed display
-        const speedIndicator = shadow.querySelector('.draggable');
-        if (speedIndicator) {
-          speedIndicator.textContent = newSpeed.toFixed(2);
+        if (onSpeedChange) {
+          // GIF path: delegate to callback; callback handles clamping and indicator update
+          onSpeedChange(delta < 0 ? step : -step);
+        } else {
+          // Video path: existing behavior unchanged
+          let newSpeed = video.playbackRate + (delta < 0 ? step : -step);
+          newSpeed = Math.min(
+            Math.max(newSpeed, window.VSC.Constants.SPEED_LIMITS.MIN),
+            window.VSC.Constants.SPEED_LIMITS.MAX
+          );
+          video.playbackRate = newSpeed;
+          const speedIndicator = shadow.querySelector('.draggable');
+          if (speedIndicator) {
+            speedIndicator.textContent = newSpeed.toFixed(2);
+          }
+          window.VSC.logger.debug(`Wheel control: speed changed to ${newSpeed.toFixed(2)}`);
         }
-
-        window.VSC.logger.debug(`Wheel control: speed changed to ${newSpeed.toFixed(2)}`);
       },
       { passive: false }
     );

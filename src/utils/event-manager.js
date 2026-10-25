@@ -217,12 +217,16 @@ class EventManager {
       return false;
     }
 
-    // Ignore keydown event if no media elements are present
+    // Ignore keydown event if no controllable elements are present (media or GIF)
     const mediaElements = this.config.getMediaElements();
-    if (!mediaElements.length) {
+    const gifElements = this.config.settings?.controlGifs
+      ? this.config.getGifElements?.() || []
+      : [];
+    if (!mediaElements.length && !gifElements.length) {
       if (logDiagnostic) {
-        this.logKeyBindingDiagnostic('ignored because no media elements are tracked', {
+        this.logKeyBindingDiagnostic('ignored because no media or GIF elements are tracked', {
           mediaCount: mediaElements.length,
+          gifCount: gifElements.length,
         });
       }
       return false;

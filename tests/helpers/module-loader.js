@@ -67,3 +67,41 @@ export async function loadObserverModules() {
   await import('../../src/utils/dom-utils.js');
   await import('../../src/observers/mutation-observer.js');
 }
+
+export async function loadGifModules() {
+  await loadCoreModules();
+  globalThis.__VSC_gifuct = {
+    parseGIF: (_ab) => ({
+      lsd: { width: 10, height: 10, backgroundColorIndex: 0 },
+      gct: [255, 0, 0, 0, 0, 255, 0, 0, 0, 0, 0, 0],
+      loopCount: 0,
+    }),
+    decompressFrames: (_parsed, _full) => [
+      {
+        patch: new Uint8ClampedArray(10 * 10 * 4).fill(255),
+        dims: { left: 0, top: 0, width: 10, height: 10 },
+        delay: 100,
+        disposalType: 1,
+      },
+      {
+        patch: new Uint8ClampedArray(10 * 10 * 4).map((_, i) => (i % 4 === 2 ? 255 : 0)),
+        dims: { left: 0, top: 0, width: 10, height: 10 },
+        delay: 200,
+        disposalType: 2,
+      },
+    ],
+  };
+  // Load GIF modules in order
+  try {
+    // Set window.__VSC_gifuct for browser context
+    if (typeof window !== 'undefined') {
+      window.__VSC_gifuct = globalThis.__VSC_gifuct;
+    }
+    await import('../../src/core/gif-frame-engine.js');
+    await import('../../src/observers/gif-observer.js');
+    await import('../../src/core/gif-controller.js');
+  } catch (err) {
+    // Modules may fail in test context; that's expected for some tests
+    console.warn('loadGifModules: some modules failed to load:', err.message);
+  }
+}

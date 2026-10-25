@@ -6,11 +6,13 @@
 window.VSC = window.VSC || {};
 
 class VideoMutationObserver {
-  constructor(config, onVideoFound, onVideoRemoved, mediaObserver) {
+  constructor(config, onVideoFound, onVideoRemoved, mediaObserver, onGifFound, onGifRemoved) {
     this.config = config;
     this.onVideoFound = onVideoFound;
     this.onVideoRemoved = onVideoRemoved;
     this.mediaObserver = mediaObserver;
+    this.onGifFound = onGifFound || null;
+    this.onGifRemoved = onGifRemoved || null;
     this.observer = null;
     this.shadowObservers = new Set();
   }
@@ -205,6 +207,24 @@ class VideoMutationObserver {
         }
       }
     } else {
+      // GIF detection: fast string pre-check before regex
+      if (node.nodeName === 'IMG') {
+        const srcHint = node.src || '';
+        if (
+          (srcHint.includes('.gif') || srcHint.startsWith('data:image/gif')) &&
+          this.onGifFound &&
+          window.VSC.GifObserver?.isGifElement(node)
+        ) {
+          if (added && !node.vscGifIgnore) {
+            this.onGifFound(node, parent);
+          } else if (!added) {
+            if (node.gifController && typeof node.gifController.remove === 'function') {
+              this.onGifRemoved(node);
+            }
+          }
+        }
+        return; // Do not recurse into IMG children
+      }
       this.processNodeChildren(node, parent, added);
     }
   }

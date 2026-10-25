@@ -69,6 +69,24 @@ class VideoSpeedExtension {
 
       this.logger.info('Video Speed Controller initialized successfully');
       this.initialized = true;
+
+      // Page visibility — stop all GIF loops when tab is backgrounded
+      document.addEventListener('visibilitychange', () => {
+        const hidden = document.visibilityState === 'hidden';
+        if (this.config && typeof this.config.getGifElements === 'function') {
+          this.config.getGifElements().forEach((img) => {
+            const gc = img.gifController;
+            if (!gc || typeof gc._stopRafLoop !== 'function') {
+              return;
+            }
+            if (hidden) {
+              gc._stopRafLoop();
+            } else if (!gc._userPaused && !gc._visibilityPaused) {
+              gc._startRafLoop();
+            }
+          });
+        }
+      });
     } catch (error) {
       console.error(`❌ Failed to initialize Video Speed Controller: ${error.message}`);
       console.error('📋 Full error details:', error);
@@ -154,6 +172,29 @@ class VideoSpeedExtension {
           this.onVideoFound(media, media.parentElement || media.parentNode);
         });
 
+        // GIF scan
+        if (this.config.settings.controlGifs) {
+          const gifImgs = this.mediaObserver.scanForGifs
+            ? this.mediaObserver.scanForGifs(document)
+            : [];
+          let gifIdx = 0;
+          const attachNextGif = () => {
+            if (gifIdx >= gifImgs.length) {
+              return;
+            }
+            const img = gifImgs[gifIdx++];
+            this.onGifFound(img, img.parentElement || img.parentNode);
+            if (window.requestIdleCallback) {
+              requestIdleCallback(attachNextGif, { timeout: 500 });
+            } else {
+              setTimeout(attachNextGif, 0);
+            }
+          };
+          if (gifImgs.length > 0) {
+            attachNextGif();
+          }
+        }
+
         this.logger.info(
           `Attached controllers to ${lightMedia.length} media elements (light scan)`
         );
@@ -231,7 +272,9 @@ class VideoSpeedExtension {
       this.config,
       (video, parent) => this.onVideoFound(video, parent),
       (video) => this.onVideoRemoved(video),
-      this.mediaObserver
+      this.mediaObserver,
+      (img, parent) => this.onGifFound(img, parent),
+      (img) => this.onGifRemoved(img)
     );
   }
 
@@ -290,6 +333,53 @@ class VideoSpeedExtension {
   }
 
   /**
+   * Handle newly found GIF element
+   * @param {HTMLImageElement} img - GIF image element
+   * @param {HTMLElement} parent - Parent element
+   */
+  async onGifFound(img, parent) {
+    try {
+      if (!this.config.settings.controlGifs) {
+        return;
+      }
+      if (img.gifController) {
+        return;
+      }
+      if (img.vscGifIgnore) {
+        delete img.vscGifIgnore;
+        return;
+      }
+      img.gifController = { pending: true }; // SYNCHRONOUS sentinel — prevents double-attach race
+      const gc = await window.VSC.GifController.create(
+        img,
+        parent,
+        this.config,
+        this.actionHandler
+      );
+      if (!gc) {
+        delete img.gifController;
+      }
+    } catch (error) {
+      delete img.gifController;
+      this.logger.error(`Failed to attach GIF controller: ${error.message}`);
+    }
+  }
+
+  /**
+   * Handle removed GIF element
+   * @param {HTMLImageElement} img - GIF image element
+   */
+  onGifRemoved(img) {
+    try {
+      if (img.gifController && typeof img.gifController.remove === 'function') {
+        img.gifController.remove();
+      }
+    } catch (error) {
+      this.logger.error(`Failed to remove GIF controller: ${error.message}`);
+    }
+  }
+
+  /**
    * Set up CSS for iframe documents
    * @param {Document} document - Document to set up CSS for
    */
@@ -327,6 +417,22 @@ class VideoSpeedExtension {
         }
       });
 
+      // Clean up all GIF controllers
+      if (this.config && typeof this.config.getGifElements === 'function') {
+        this.config
+          .getGifElements()
+          .slice()
+          .forEach((img) => {
+            try {
+              if (img.gifController && typeof img.gifController.remove === 'function') {
+                img.gifController.remove();
+              }
+            } catch (err) {
+              this.logger.error(`GIF cleanup error: ${err.message}`);
+            }
+          });
+      }
+
       this.initialized = false;
       this.logger.info('Video Speed Controller cleaned up');
     } catch (error) {
@@ -355,6 +461,14 @@ window.addEventListener('VSC_MESSAGE', (event) => {
               video.playbackRate = targetSpeed;
             }
           });
+          // GIF elements
+          if (window.VSC.videoSpeedConfig?.settings?.controlGifs) {
+            window.VSC.videoSpeedConfig.getGifElements?.()?.forEach?.((img) => {
+              if (img.gifController && typeof img.gifController.setSpeed === 'function') {
+                img.gifController.setSpeed(targetSpeed);
+              }
+            });
+          }
         }
         break;
 
@@ -369,6 +483,20 @@ window.addEventListener('VSC_MESSAGE', (event) => {
               video.playbackRate = newSpeed;
             }
           });
+          // GIF elements
+          if (window.VSC.videoSpeedConfig?.settings?.controlGifs) {
+            window.VSC.videoSpeedConfig.getGifElements?.()?.forEach?.((img) => {
+              const gc = img.gifController;
+              if (gc && typeof gc.setSpeed === 'function' && typeof gc._speed === 'number') {
+                gc.setSpeed(
+                  Math.min(
+                    Math.max(gc._speed + delta, window.VSC.Constants.SPEED_LIMITS.MIN),
+                    window.VSC.Constants.SPEED_LIMITS.MAX
+                  )
+                );
+              }
+            });
+          }
         }
         break;
 
@@ -380,6 +508,14 @@ window.addEventListener('VSC_MESSAGE', (event) => {
             video.playbackRate = 1.0;
           }
         });
+        // GIF elements
+        if (window.VSC.videoSpeedConfig?.settings?.controlGifs) {
+          window.VSC.videoSpeedConfig.getGifElements?.()?.forEach?.((img) => {
+            if (img.gifController && typeof img.gifController.setSpeed === 'function') {
+              img.gifController.setSpeed(1.0);
+            }
+          });
+        }
         break;
 
       case window.VSC.Constants.MESSAGE_TYPES.TOGGLE_DISPLAY:

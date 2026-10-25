@@ -289,6 +289,8 @@ async function save_options() {
     var controllerButtonSize = Number(document.getElementById("controllerButtonSize").value);
     var logLevel = parseInt(document.getElementById("logLevel").value);
     var blacklist = document.getElementById("blacklist").value;
+    const controlGifs = document.getElementById('controlGifs').checked;
+    const gifSpeedStep = parseFloat(document.getElementById('gifSpeedStep').value) || 0.1;
 
     // Clean up legacy keys
     await chrome.storage.sync.remove([
@@ -320,7 +322,9 @@ async function save_options() {
       controllerButtonSize: controllerButtonSize,
       logLevel: logLevel,
       keyBindings: keyBindings,
-      blacklist: blacklist.replace(window.VSC.Constants.regStrip, "")
+      blacklist: blacklist.replace(window.VSC.Constants.regStrip, ""),
+      controlGifs: controlGifs,
+      gifSpeedStep: Math.min(Math.max(gifSpeedStep, 0.01), 1.0),
     };
 
     await window.VSC.videoSpeedConfig.save(settingsToSave);
@@ -372,6 +376,10 @@ async function restore_options() {
     document.getElementById("controllerButtonSize").value = storage.controllerButtonSize;
     document.getElementById("logLevel").value = storage.logLevel;
     document.getElementById("blacklist").value = storage.blacklist;
+    document.getElementById('controlGifs').checked = storage.controlGifs !== false;
+    document.getElementById('gifSpeedStep').value =
+      (typeof storage.gifSpeedStep === 'number' && storage.gifSpeedStep > 0)
+        ? storage.gifSpeedStep.toFixed(2) : '0.10';
 
     // Process key bindings
     const keyBindings = storage.keyBindings || window.VSC.Constants.DEFAULT_SETTINGS.keyBindings;

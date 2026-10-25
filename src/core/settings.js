@@ -11,6 +11,7 @@ if (!window.VSC.VideoSpeedConfig) {
     constructor() {
       this.settings = { ...window.VSC.Constants.DEFAULT_SETTINGS };
       this.mediaElements = [];
+      this.gifElements = [];
     }
 
     /**
@@ -51,6 +52,22 @@ if (!window.VSC.VideoSpeedConfig) {
         this.settings.logLevel = Number(
           storage.logLevel || window.VSC.Constants.DEFAULT_SETTINGS.logLevel
         );
+
+        // GIF speed control settings
+        this.settings.controlGifs =
+          storage.controlGifs !== undefined ? Boolean(storage.controlGifs) : true;
+
+        const rawLastGifSpeed = Number(storage.lastGifSpeed);
+        this.settings.lastGifSpeed =
+          Number.isFinite(rawLastGifSpeed) &&
+          rawLastGifSpeed >= window.VSC.Constants.SPEED_LIMITS.MIN &&
+          rawLastGifSpeed <= window.VSC.Constants.SPEED_LIMITS.MAX
+            ? rawLastGifSpeed
+            : 1.0;
+
+        const rawStep = Number(storage.gifSpeedStep);
+        this.settings.gifSpeedStep =
+          Number.isFinite(rawStep) && rawStep >= 0.01 && rawStep <= 1.0 ? rawStep : 0.1;
 
         // Ensure display binding exists (for upgrades)
         this.ensureDisplayBinding(storage);
@@ -224,6 +241,9 @@ if (!window.VSC.VideoSpeedConfig) {
         controllerOpacity: this.settings.controllerOpacity,
         controllerButtonSize: this.settings.controllerButtonSize,
         blacklist: this.settings.blacklist,
+        controlGifs: this.settings.controlGifs,
+        lastGifSpeed: this.settings.lastGifSpeed,
+        gifSpeedStep: this.settings.gifSpeedStep,
       });
     }
 
@@ -271,6 +291,23 @@ if (!window.VSC.VideoSpeedConfig) {
      */
     getMediaElements() {
       return this.mediaElements;
+    }
+
+    addGifElement(element) {
+      if (!this.gifElements.includes(element)) {
+        this.gifElements.push(element);
+      }
+    }
+
+    removeGifElement(element) {
+      const index = this.gifElements.indexOf(element);
+      if (index !== -1) {
+        this.gifElements.splice(index, 1);
+      }
+    }
+
+    getGifElements() {
+      return this.gifElements;
     }
   }
 

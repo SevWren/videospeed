@@ -14,6 +14,8 @@ const mockStorage = {
   controllerButtonSize: 14,
   blacklist: 'www.instagram.com\nx.com',
   logLevel: 3,
+  controlGifs: true,
+  lastGifSpeed: 1.0,
 };
 
 export const chromeMock = {
@@ -113,5 +115,7 @@ export function resetMockStorage() {
     controllerButtonSize: 14,
     blacklist: 'www.instagram.com\nx.com',
     logLevel: 3,
+    controlGifs: true,
+    lastGifSpeed: 1.0,
   });
 }

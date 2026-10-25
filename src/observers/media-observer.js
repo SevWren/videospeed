@@ -239,6 +239,29 @@ class MediaElementObserver {
   }
 
   /**
+   * Scan document for GIF image elements
+   * @param {Document} doc - Document to scan
+   * @returns {Array<HTMLImageElement>} Found GIF elements
+   */
+  scanForGifs(doc) {
+    if (!window.VSC.GifObserver) {
+      return [];
+    }
+    const imgs = Array.from(doc.querySelectorAll('img'));
+    return imgs.filter((img) => {
+      if (img.gifController || img.vscGifIgnore) {
+        return false;
+      }
+      if (!window.VSC.GifObserver.isGifElement(img)) {
+        return false;
+      }
+      const w = img.naturalWidth || img.width || 0;
+      const h = img.naturalHeight || img.height || 0;
+      return w >= window.VSC.Constants.GIF_MIN_SIZE_PX && h >= window.VSC.Constants.GIF_MIN_SIZE_PX;
+    });
+  }
+
+  /**
    * Find the best parent element for controller positioning
    * @param {HTMLMediaElement} media - Media element
    * @returns {HTMLElement} Parent element for positioning

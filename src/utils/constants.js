@@ -50,13 +50,16 @@ if (!window.VSC.Constants.DEFAULT_SETTINGS) {
       { action: 'mark', key: 77, value: 0, force: false, predefined: true }, // M
       { action: 'jump', key: 74, value: 0, force: false, predefined: true }, // J
     ],
-//x.com
+    //x.com
     blacklist: `www.instagram.com
 imgur.com
 teams.microsoft.com
 meet.google.com`.replace(regStrip, ''),
     defaultLogLevel: 4,
     logLevel: 3,
+    controlGifs: true,
+    lastGifSpeed: 1.0,
+    gifSpeedStep: 0.1,
   };
 
   window.VSC.Constants.DEFAULT_SETTINGS = DEFAULT_SETTINGS;
@@ -80,6 +83,8 @@ meet.google.com`.replace(regStrip, ''),
     CONTROLLER_CREATED: 'VSC_CONTROLLER_CREATED',
     CONTROLLER_REMOVED: 'VSC_CONTROLLER_REMOVED',
     QUERY_ACTIVE_CONTROLLERS: 'VSC_QUERY_ACTIVE_CONTROLLERS',
+    DISABLE_GIF_CONTROL: 'VSC_DISABLE_GIF_CONTROL',
+    ENABLE_GIF_CONTROL: 'VSC_ENABLE_GIF_CONTROL',
   };
 
   const SPEED_LIMITS = {
@@ -105,6 +110,12 @@ meet.google.com`.replace(regStrip, ''),
   window.VSC.Constants.SPEED_LIMITS = SPEED_LIMITS;
   window.VSC.Constants.CONTROLLER_SIZE_LIMITS = CONTROLLER_SIZE_LIMITS;
   window.VSC.Constants.CUSTOM_ACTIONS_NO_VALUES = CUSTOM_ACTIONS_NO_VALUES;
+
+  // GIF speed control constants
+  window.VSC.Constants.GIF_GLOBAL_MEMORY_BUDGET_BYTES = 200 * 1024 * 1024; // 200 MB
+  window.VSC.Constants.GIF_FRAME_CACHE_LIMIT_BYTES = 50 * 1024 * 1024; // 50 MB soft per-GIF
+  window.VSC.Constants.GIF_MIN_SIZE_PX = 20;
+  window.VSC.Constants.GIF_SPEED_SAVE_DEBOUNCE_MS = 500;
 } // End conditional loading check
 
 // Global variables available for both browser and testing

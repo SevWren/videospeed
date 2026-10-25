@@ -131,6 +131,18 @@
       </label>
       <textarea id="blacklist" rows="10" cols="50"></textarea>
       </label>
+    <div class="row">
+      <label for="controlGifs">GIF speed control
+        <em>Replaces animated GIFs with a canvas element for speed control. Cross-origin GIFs fall back gracefully.</em>
+      </label>
+      <input id="controlGifs" type="checkbox" />
+    </div>
+    <div class="row">
+      <label for="gifSpeedStep">GIF speed step
+        <em>Amount to change GIF speed per keypress (default: 0.10)</em>
+      </label>
+      <input id="gifSpeedStep" type="number" min="0.01" max="1.0" step="0.01" />
+    </div>
   </section>
 
   <div class="button-group">

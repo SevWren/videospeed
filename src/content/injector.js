@@ -56,6 +56,10 @@ async function injectModules() {
       'src/site-handlers/amazon-handler.js',
       'src/site-handlers/apple-handler.js',
       'src/site-handlers/index.js',
+      'src/lib/gifuct-js.min.js',
+      'src/core/gif-frame-engine.js',
+      'src/observers/gif-observer.js',
+      'src/core/gif-controller.js',
       'src/content/inject.js',
     ];
 

@@ -8,6 +8,7 @@
     "test:unit": "node tests/run-tests.js unit",
     "test:integration": "node tests/run-tests.js integration",
     "test:e2e": "node tests/e2e/run-e2e.js",
+    "test:gif": "node tests/run-tests.js gif",
     "test:browser": "echo 'Open tests/fixtures/test-page.html in browser'",
     "serve": "python3 -m http.server 8000",
     "lint": "eslint src/**/*.js tests/**/*.js",
@@ -25,6 +26,7 @@
     "puppeteer": "^24.10.2"
   },
   "eslintConfig": {
+    "ignorePatterns": ["src/lib/*.min.js"],
     "env": {
       "browser": true,
       "es2022": true,
@@ -72,5 +74,8 @@
     "tabWidth": 2,
     "trailingComma": "es5",
     "printWidth": 100
+  },
+  "dependencies": {
+    "gifuct-js": "^2.1.2"
   }
 }

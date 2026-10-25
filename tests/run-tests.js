@@ -117,6 +117,37 @@ if (!global.HTMLElement.prototype.attachShadow) {
   };
 }
 
+// Canvas 2D context mock for GIF tests
+if (dom.window.HTMLCanvasElement && !dom.window.HTMLCanvasElement.prototype.getContext) {
+  dom.window.HTMLCanvasElement.prototype.getContext = function (_type) {
+    return {
+      putImageData: () => {},
+      clearRect: () => {},
+      fillRect: () => {},
+      drawImage: () => {},
+      getImageData: (_x, _y, w, h) => ({ data: new Uint8ClampedArray((w || 1) * (h || 1) * 4), width: w || 1, height: h || 1 }),
+      canvas: this,
+    };
+  };
+}
+global.HTMLCanvasElement = dom.window.HTMLCanvasElement;
+if (!global.fetch) { global.fetch = async () => null; }
+if (!global.requestAnimationFrame) {
+  const _rafQueue = [];
+  global.requestAnimationFrame = (fn) => { _rafQueue.push(fn); return _rafQueue.length; };
+  global.cancelAnimationFrame = (id) => { if (id > 0 && id <= _rafQueue.length) _rafQueue[id - 1] = null; };
+  global._drainRaf = (ts = performance.now()) => { const q = _rafQueue.splice(0); q.forEach((fn) => fn && fn(ts)); };
+}
+if (!global.performance) { global.performance = dom.window.performance; }
+if (!global.IntersectionObserver) {
+  global.IntersectionObserver = class {
+    constructor() {}
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}
+
 async function runTests() {
   console.log('🧪 Video Speed Controller - CLI Test Runner\n');
 
@@ -139,11 +170,16 @@ async function runTests() {
       'unit/observers/audio-size-handling.test.js',
       'unit/content/inject.test.js',
       'unit/utils/recursive-shadow-dom.test.js',
-      'unit/utils/blacklist-regex.test.js'
+      'unit/utils/blacklist-regex.test.js',
+      'unit/core/gif-frame-engine.test.js',
+      'unit/observers/gif-observer.test.js',
+      'unit/core/gif-controller.test.js',
+      'unit/core/action-handler-gif.test.js',
     ];
   } else if (testType === 'integration') {
     testFiles = [
-      'integration/module-integration.test.js'
+      'integration/module-integration.test.js',
+      'integration/gif-integration.test.js',
     ];
   } else {
     // Run all tests
@@ -159,7 +195,12 @@ async function runTests() {
       'unit/content/inject.test.js',
       'unit/utils/recursive-shadow-dom.test.js',
       'unit/utils/blacklist-regex.test.js',
-      'integration/module-integration.test.js'
+      'unit/core/gif-frame-engine.test.js',
+      'unit/observers/gif-observer.test.js',
+      'unit/core/gif-controller.test.js',
+      'unit/core/action-handler-gif.test.js',
+      'integration/module-integration.test.js',
+      'integration/gif-integration.test.js',
     ];
   }
 

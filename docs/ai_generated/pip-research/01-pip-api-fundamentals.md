@@ -137,6 +137,8 @@ Because the `<video>` element stays in the original document's DOM (see §1), al
 
 This is the foundation that allows VideoSpeed's playback rate controls to continue working while a video is in PiP mode — the extension's content script operates in the same document context as the video element and can manipulate it regardless of PiP state.
 
+> **Note — GIF playback (canvas replacement):** VideoSpeed also controls animated GIF speed by replacing `<img>` elements with `<canvas>` elements driven by a `requestAnimationFrame` loop (see `src/core/gif-controller.js`). These canvas elements are **not** `HTMLVideoElement` instances and are **not** candidates for either the Video PiP API or the Document PiP API. `HTMLCanvasElement` has no `requestPictureInPicture()` method, and the canvas replacement approach has no interaction with PiP state whatsoever. The analysis in this section applies only to `<video>` (and `<audio>`) elements controlled by the extension.
+
 ---
 
 ## 6. Document PiP vs. Video PiP — key differences
@@ -154,6 +156,8 @@ This table summarizes the two APIs to prevent confusion. VideoSpeed currently ta
 | Script control from opener | Full — video element unchanged in opener DOM | Full — via `pipWindow.document` or direct references |
 | Custom UI in PiP window | No | Yes |
 | Chrome support | Chrome 70+ | Chrome 116+ |
+
+> **Note — canvas-based GIF elements are not PiP candidates:** VideoSpeed replaces animated `<img>` GIFs with `<canvas>` elements for speed control. `HTMLCanvasElement` supports neither the Video PiP API nor (in normal usage) the Document PiP API. GIF-sourced media controlled by this extension is entirely outside the scope of both APIs in this table.
 
 ---
 

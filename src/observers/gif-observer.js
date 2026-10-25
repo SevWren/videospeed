@@ -17,7 +17,7 @@ if (!window.VSC.GifObserver) {
     if (src.startsWith('data:image/gif')) {
       return true;
     }
-    return /\.gif(\?[^#]*)?(#.*)?$/i.test(src);
+    return /\.gif([/?#]|$)/i.test(src);
   };
 
   const isGifElement = (element) => {
@@ -44,7 +44,7 @@ if (!window.VSC.GifObserver) {
       if (!isGifElement(img)) {
         return false;
       }
-      if (img.naturalWidth > 0 || img.naturalHeight > 0) {
+      if (img.naturalWidth > 0 && img.naturalHeight > 0) {
         const w = img.naturalWidth || img.width || 0;
         const h = img.naturalHeight || img.height || 0;
         return w >= window.VSC.Constants.GIF_MIN_SIZE_PX && h >= window.VSC.Constants.GIF_MIN_SIZE_PX;

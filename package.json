@@ -1,7 +1,7 @@
 {
   "name": "video-speed-controller",
-  "version": "0.8.0",
-  "description": "Speed up, slow down, advance and rewind HTML5 audio/video with shortcuts",
+  "version": "0.9.1",
+  "description": "Speed up, slow down, advance and rewind HTML5 audio/video and animated GIFs with shortcuts",
   "type": "module",
   "scripts": {
     "test": "node tests/run-tests.js",

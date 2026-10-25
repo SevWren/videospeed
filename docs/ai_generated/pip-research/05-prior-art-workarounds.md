@@ -126,6 +126,8 @@ Examined files: `src/content/inject.js`, `src/utils/event-manager.js`, `src/core
 
 **The extension has no working PiP hotkey solution as of the examined codebase.**
 
+> **Note — GIF playback feature (shipped after this research):** A canvas-replacement GIF playback feature has since been added to the extension (`src/core/gif-controller.js`, `src/core/gif-frame-engine.js`, `src/observers/gif-observer.js`). This feature replaces `<img>` GIF elements with `<canvas>` elements driven by a `requestAnimationFrame` loop and uses `MutationObserver` to watch `src` attribute changes and `IntersectionObserver` to pause off-screen GIFs. It does **not** use `HTMLMediaElement` or any PiP API. Canvas elements are not eligible for either the Video PiP API or the Document PiP API, so the GIF feature introduces no new PiP surface and is entirely out of scope for the analysis in this section.
+
 ---
 
 ## 5. Message-Passing Pattern (Content Script ↔ Background ↔ PiP Window)

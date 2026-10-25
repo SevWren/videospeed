@@ -60,7 +60,6 @@ async function injectModules() {
       'src/core/gif-frame-engine.js',
       'src/observers/gif-observer.js',
       'src/core/gif-controller.js',
-      'src/content/inject.js',
     ];
 
     // Inject modules with yielding to avoid blocking page load
@@ -82,6 +81,9 @@ async function injectModules() {
 
     // Inject site-specific scripts if needed
     await injectSiteSpecificScripts();
+
+    await injectScript('src/content/inject.js');
+    await injectUserSettings();
 
     // Set up message bridge between popup and injected scripts
     setupMessageBridge();
@@ -121,8 +123,6 @@ function setupMessageBridge() {
     }
   };
 
-  // Fetch and inject user settings into page context
-  injectUserSettings();
 
   window.addEventListener(
     'keydown',

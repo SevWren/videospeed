@@ -67,13 +67,18 @@ if (!window.VSC.StorageManager) {
       }
 
       return new Promise((resolve) => {
+        const deadline = setTimeout(() => {
+          window.VSC.logger.warn('waitForInjectedSettings: timed out after 5000ms, resolving with defaults');
+          resolve({ ...defaults });
+        }, 5000);
+
         const checkSettings = () => {
           if (this._injectedSettings) {
+            clearTimeout(deadline);
             const merged = { ...defaults, ...this._injectedSettings };
             window.VSC.logger.debug('Injected settings now available');
             resolve(merged);
           } else {
-            // Check again in next tick
             setTimeout(checkSettings, 10);
           }
         };

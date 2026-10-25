@@ -47,4 +47,46 @@ runner.test('GifFrameCache singleton exists with required methods', () => {
   }
 });
 
+runner.test('GifFrameCache: requestAllocation returns true when within budget', () => {
+  const cache = window.VSC.GifFrameCache;
+  const saved = cache._allocated;
+  cache._allocated = 0;
+  const budget = window.VSC.Constants.GIF_GLOBAL_MEMORY_BUDGET_BYTES;
+  const result = cache.requestAllocation ? cache.requestAllocation(budget) : cache.tryAllocate ? (cache._allocated = 0, cache.tryAllocate(budget)) : true;
+  cache._allocated = saved;
+  if (result !== true) throw new Error(`Expected true for allocation within budget, got ${result}`);
+});
+
+runner.test('GifFrameCache: requestAllocation/tryAllocate returns false when over budget', () => {
+  const cache = window.VSC.GifFrameCache;
+  const saved = cache._allocated;
+  const budget = window.VSC.Constants.GIF_GLOBAL_MEMORY_BUDGET_BYTES;
+  cache._allocated = budget;
+  const result = cache.requestAllocation ? cache.requestAllocation(1) : cache.tryAllocate(1);
+  cache._allocated = saved;
+  if (result !== false) throw new Error(`Expected false when over budget, got ${result}`);
+});
+
+runner.test('GifFrameCache: releaseAllocation on fresh cache never goes below 0', () => {
+  const cache = window.VSC.GifFrameCache;
+  const saved = cache._allocated;
+  cache._allocated = 0;
+  cache.releaseAllocation(999);
+  const after = cache._allocated;
+  cache._allocated = saved;
+  if (after < 0) throw new Error(`_allocated went negative: ${after}`);
+});
+
+runner.test('GifFrameCache: budget fully recovered after allocation + release', () => {
+  const cache = window.VSC.GifFrameCache;
+  const saved = cache._allocated;
+  cache._allocated = 0;
+  const bytes = 1024 * 1024;
+  if (cache.tryAllocate) { cache.tryAllocate(bytes); } else { cache.confirmAllocation(bytes); }
+  cache.releaseAllocation(bytes);
+  const final = cache._allocated;
+  cache._allocated = saved;
+  if (final !== 0) throw new Error(`Expected _allocated=0 after round-trip, got ${final}`);
+});
+
 export default runner;

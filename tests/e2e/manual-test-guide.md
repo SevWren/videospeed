@@ -1,6 +1,6 @@
 # Manual E2E Testing Guide for Video Speed Controller
 
-Since automated E2E testing requires a GUI environment that may not be available in all systems, here's a manual testing guide to verify the extension works correctly.
+Since automated E2E testing requires a GUI environment that may not be available in all systems, here's a manual testing guide to verify the extension works correctly for both video/audio and animated GIF speed control.
 
 ## Prerequisites
 
@@ -38,7 +38,7 @@ Since automated E2E testing requires a GUI environment that may not be available
 **Steps:**
 1. Click the "+" (faster) button
 2. Observe speed changes to ~1.10
-3. Click the "-" (slower) button  
+3. Click the "-" (slower) button
 4. Observe speed changes to ~1.00
 5. Click faster multiple times
 6. Click the reset button
@@ -62,7 +62,7 @@ Since automated E2E testing requires a GUI environment that may not be available
 
 **Expected Results:**
 - ✅ 'D' increases speed
-- ✅ 'S' decreases speed  
+- ✅ 'S' decreases speed
 - ✅ 'R' resets to 1.00x
 - ✅ 'Z' rewinds video by ~10 seconds
 - ✅ 'X' advances video by ~10 seconds
@@ -98,6 +98,9 @@ Since automated E2E testing requires a GUI environment that may not be available
 **Test URLs:**
 - https://vimeo.com/90509568
 - https://developer.mozilla.org/en-US/docs/Web/HTML/Element/video (scroll to examples)
+- https://giphy.com
+- https://tenor.com
+- https://www.reddit.com
 
 **Steps:**
 1. Navigate to different video sites
@@ -107,6 +110,66 @@ Since automated E2E testing requires a GUI environment that may not be available
 **Expected Results:**
 - ✅ Controller works on multiple video sites
 - ✅ All functionality is consistent across sites
+
+### 7. GIF Detection Test
+
+**Steps:**
+1. Navigate to https://giphy.com or https://tenor.com
+2. Wait for the page to load with animated GIFs visible
+3. Right-click on one of the animated GIFs and select "Inspect"
+4. In DevTools, verify the element is a `<canvas>` and not an `<img>`
+5. Verify the speed controller overlay appears on top of the canvas element
+6. Scroll down the page to trigger lazy loading of additional GIFs
+7. Verify the speed controller overlay appears on newly loaded GIFs as they come into view
+8. Open extension options and set `controlGifs` to `false`
+9. Reload the page and inspect a GIF element again
+
+**Expected Results:**
+- ✅ Animated GIF `<img>` elements are replaced by `<canvas>` elements
+- ✅ Speed controller overlay is visible on top of each canvas
+- ✅ Lazy-loaded GIFs also get the speed controller overlay after they load
+- ✅ With `controlGifs: false`, `<img>` elements are NOT replaced — original images remain
+
+### 8. GIF Speed Control Test
+
+**Steps:**
+1. Navigate to a page with GIF controller overlays visible (e.g., https://giphy.com)
+2. Press **Z** while a GIF controller is active
+3. Observe the GIF playback rate
+4. Press **C**
+5. Observe the GIF playback rate
+6. Press **S**
+7. Observe the GIF playback rate
+8. Position the mouse cursor over a GIF overlay and scroll the mouse wheel up
+9. Scroll the mouse wheel down over the same overlay
+10. Press **V**
+11. Press **E** or **W** (rewind shortcut)
+12. Press **R** or **T** (advance shortcut)
+
+**Expected Results:**
+- ✅ **Z** slows down GIF playback
+- ✅ **C** speeds up GIF playback
+- ✅ **S** resets GIF speed to 1.0x
+- ✅ Scrolling mouse wheel up over the overlay increases GIF speed
+- ✅ Scrolling mouse wheel down over the overlay decreases GIF speed
+- ✅ **V** toggles the GIF controller overlay visibility
+- ✅ **E** / **W** (rewind) do NOT affect GIF playback — these are video-only shortcuts
+- ✅ **R** / **T** (advance) do NOT affect GIF playback — these are video-only shortcuts
+
+### 9. GIF Speed Persistence Test
+
+**Steps:**
+1. Navigate to https://giphy.com
+2. Use the GIF speed controls to set GIF speed to 2.0x
+3. Navigate to https://tenor.com (a different page with GIFs)
+4. Observe the initial playback speed of GIFs on the new page
+5. Reset GIF speed back to 1.0x
+6. Reload the current page
+7. Observe the initial playback speed after reload
+
+**Expected Results:**
+- ✅ GIFs on tenor.com start playing at 2.0x (speed persisted via chrome.storage.sync)
+- ✅ After resetting to 1.0x and reloading, GIFs start at 1.0x
 
 ## Troubleshooting
 
@@ -123,6 +186,20 @@ Since automated E2E testing requires a GUI environment that may not be available
 ### Performance Issues
 - Lower video quality if needed
 - Close other tabs to free up resources
+
+### GIF Overlay Not Appearing
+- Check that `controlGifs` is enabled in extension options
+- Open DevTools (F12) → Console and check for fetch errors related to GIF loading
+- Confirm the page is one of the supported GIF-heavy sites (giphy.com, tenor.com, reddit.com)
+
+### GIF Speed Not Persisting
+- Check that chrome.storage.sync is accessible — it may be blocked by a device or enterprise policy
+- Open DevTools → Application → Storage to verify data is being written
+
+### Canvas Appears Black or Frozen
+- This is a known edge case for certain GIF formats or very large GIFs
+- Open DevTools → Console and check for errors during canvas rendering
+- Try a different GIF on the same page to confirm whether it is format-specific
 
 ## Reporting Results
 
@@ -141,3 +218,8 @@ All test cases should pass, confirming:
 4. Keyboard shortcuts work
 5. Settings persist appropriately
 6. Cross-site compatibility
+7. [ ] GIF `<img>` elements replaced by `<canvas>` with speed overlay
+8. [ ] GIF speed responds to Z/C/S keyboard shortcuts
+9. [ ] GIF speed responds to mouse wheel on overlay
+10. [ ] GIF speed persists across page navigations
+11. [ ] `controlGifs: false` disables canvas replacement

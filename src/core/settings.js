@@ -11,7 +11,7 @@ if (!window.VSC.VideoSpeedConfig) {
     constructor() {
       this.settings = { ...window.VSC.Constants.DEFAULT_SETTINGS };
       this.mediaElements = [];
-      this.gifElements = [];
+      this.gifElements = new Set();
     }
 
     /**
@@ -67,7 +67,7 @@ if (!window.VSC.VideoSpeedConfig) {
 
         const rawStep = Number(storage.gifSpeedStep);
         this.settings.gifSpeedStep =
-          Number.isFinite(rawStep) && rawStep >= 0.01 && rawStep <= 1.0 ? rawStep : 0.1;
+          Number.isFinite(rawStep) && rawStep >= window.VSC.Constants.SPEED_LIMITS.MIN && rawStep <= 1.0 ? rawStep : 0.1;
 
         // Ensure display binding exists (for upgrades)
         this.ensureDisplayBinding(storage);
@@ -79,7 +79,7 @@ if (!window.VSC.VideoSpeedConfig) {
         return this.settings;
       } catch (error) {
         window.VSC.logger.error(`Failed to load settings: ${error.message}`);
-        return window.VSC.Constants.DEFAULT_SETTINGS;
+        return { ...window.VSC.Constants.DEFAULT_SETTINGS };
       }
     }
 
@@ -293,22 +293,11 @@ if (!window.VSC.VideoSpeedConfig) {
       return this.mediaElements;
     }
 
-    addGifElement(element) {
-      if (!this.gifElements.includes(element)) {
-        this.gifElements.push(element);
-      }
-    }
+    addGifElement(element) { this.gifElements.add(element); }
 
-    removeGifElement(element) {
-      const index = this.gifElements.indexOf(element);
-      if (index !== -1) {
-        this.gifElements.splice(index, 1);
-      }
-    }
+    removeGifElement(element) { this.gifElements.delete(element); }
 
-    getGifElements() {
-      return this.gifElements;
-    }
+    getGifElements() { return [...this.gifElements]; }
   }
 
   // Create singleton instance

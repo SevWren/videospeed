@@ -9,11 +9,18 @@ window.VSC = window.VSC || {};
 if (!window.VSC.GifFrameCache) {
   window.VSC.GifFrameCache = {
     _allocated: 0,
-    requestAllocation(bytes) {
-      return this._allocated + bytes <= window.VSC.Constants.GIF_GLOBAL_MEMORY_BUDGET_BYTES;
-    },
-    confirmAllocation(bytes) {
+    tryAllocate(bytes) {
+      if (this._allocated + bytes > window.VSC.Constants.GIF_GLOBAL_MEMORY_BUDGET_BYTES) {
+        return false;
+      }
       this._allocated += bytes;
+      return true;
+    },
+    requestAllocation(bytes) {
+      return this.tryAllocate(bytes);
+    },
+    confirmAllocation(_bytes) {
+      // no-op: allocation is now handled atomically by tryAllocate
     },
     releaseAllocation(bytes) {
       this._allocated = Math.max(0, this._allocated - bytes);

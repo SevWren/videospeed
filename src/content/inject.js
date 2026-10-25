@@ -11,6 +11,7 @@ class VideoSpeedExtension {
     this.mutationObserver = null;
     this.mediaObserver = null;
     this.initialized = false;
+    this._docInitialized = false;
   }
 
   /**
@@ -101,9 +102,7 @@ class VideoSpeedExtension {
   initializeDocument(document) {
     try {
       // Prevent double initialization
-      if (document.body && document.body.classList.contains('vsc-initialized')) {
-        return;
-      }
+      if (this._docInitialized) { return; } this._docInitialized = true;
 
       if (document.body) {
         document.body.classList.add('vsc-initialized');
@@ -173,8 +172,9 @@ class VideoSpeedExtension {
         });
 
         // GIF scan
+        let gifImgs = [];
         if (this.config.settings.controlGifs) {
-          const gifImgs = this.mediaObserver.scanForGifs
+          gifImgs = this.mediaObserver.scanForGifs
             ? this.mediaObserver.scanForGifs(document)
             : [];
           let gifIdx = 0;
@@ -183,7 +183,7 @@ class VideoSpeedExtension {
               return;
             }
             const img = gifImgs[gifIdx++];
-            this.onGifFound(img, img.parentElement || img.parentNode);
+            try { this.onGifFound(img, img.parentElement || img.parentNode); } catch(e) { this.logger.error(`GIF attach error: ${e.message}`); }
             if (window.requestIdleCallback) {
               requestIdleCallback(attachNextGif, { timeout: 500 });
             } else {
@@ -200,7 +200,7 @@ class VideoSpeedExtension {
         );
 
         // Schedule comprehensive scan for later if needed
-        if (lightMedia.length === 0) {
+        if (lightMedia.length === 0 || gifImgs.length === 0) {
           this.scheduleComprehensiveScan(document);
         }
       } catch (error) {
@@ -232,6 +232,18 @@ class VideoSpeedExtension {
             this.onVideoFound(media, media.parentElement || media.parentNode);
           }
         });
+
+        if (this.config.settings.controlGifs) {
+          const gifImgs = this.mediaObserver.scanForGifs ? this.mediaObserver.scanForGifs(document) : [];
+          let gifIdx = 0;
+          const attachNextGif = () => {
+            if (gifIdx >= gifImgs.length) return;
+            const img = gifImgs[gifIdx++];
+            try { this.onGifFound(img, img.parentElement || img.parentNode); } catch(e) { this.logger.error(`GIF attach error: ${e.message}`); }
+            if (window.requestIdleCallback) { requestIdleCallback(attachNextGif, { timeout: 500 }); } else { setTimeout(attachNextGif, 0); }
+          };
+          if (gifImgs.length > 0) attachNextGif();
+        }
 
         this.logger.info(
           `Comprehensive scan found ${comprehensiveMedia.length} additional media elements`
@@ -339,25 +351,30 @@ class VideoSpeedExtension {
    */
   async onGifFound(img, parent) {
     try {
-      if (!this.config.settings.controlGifs) {
-        return;
-      }
-      if (img.gifController) {
-        return;
-      }
-      if (img.vscGifIgnore) {
+      if (!this.config.settings.controlGifs) { return; }
+      if (img.vscGifFailed) { return; }
+      if (img.gifController) { return; }
+      if (img._vscTeardownSrc !== undefined) {
+        if (img.src === img._vscTeardownSrc) { return; }
+        delete img._vscTeardownSrc;
+        delete img.vscGifIgnore;
+      } else if (img.vscGifIgnore) {
         delete img.vscGifIgnore;
         return;
       }
-      img.gifController = { pending: true }; // SYNCHRONOUS sentinel — prevents double-attach race
-      const gc = await window.VSC.GifController.create(
-        img,
-        parent,
-        this.config,
-        this.actionHandler
-      );
+      const sentinel = { pending: true, _cancelled: false };
+      sentinel.remove = function() { this._cancelled = true; };
+      img.gifController = sentinel;
+      const gc = await window.VSC.GifController.create(img, parent, this.config, this.actionHandler);
+      if (sentinel._cancelled) {
+        if (gc) gc.remove();
+        return;
+      }
       if (!gc) {
+        img.vscGifFailed = true;
         delete img.gifController;
+      } else if (!document.body?.contains(img)) {
+        gc.remove();
       }
     } catch (error) {
       delete img.gifController;
@@ -406,6 +423,10 @@ class VideoSpeedExtension {
 
       if (this.eventManager) {
         this.eventManager.cleanup();
+      }
+
+      if (this.actionHandler) {
+        this.actionHandler.cleanup();
       }
 
       this.siteHandlerManager.cleanup();
@@ -525,6 +546,35 @@ window.addEventListener('VSC_MESSAGE', (event) => {
           extension.actionHandler.runAction('display', null, null);
         }
         break;
+
+      case window.VSC.Constants.MESSAGE_TYPES.DISABLE_GIF_CONTROL:
+        if (extension.config) {
+          extension.config.settings.controlGifs = false;
+          (extension.config.getGifElements?.() || []).slice().forEach((img) => {
+            try {
+              if (img.gifController && typeof img.gifController.remove === 'function') {
+                img.gifController.remove();
+              }
+            } catch (_e) {}
+          });
+        }
+        break;
+
+      case window.VSC.Constants.MESSAGE_TYPES.ENABLE_GIF_CONTROL:
+        if (extension.config) {
+          extension.config.settings.controlGifs = true;
+        }
+        if (extension.mediaObserver && extension.config) {
+          const gifImgs = extension.mediaObserver.scanForGifs
+            ? extension.mediaObserver.scanForGifs(document)
+            : [];
+          gifImgs.forEach((img) => {
+            if (!img.gifController) {
+              extension.onGifFound(img, img.parentElement || img.parentNode);
+            }
+          });
+        }
+        break;
     }
   }
 });
@@ -540,7 +590,7 @@ window.addEventListener('beforeunload', () => {
 // Auto-initialize - settings loading will wait for injected settings if needed
 extension.initialize().catch((error) => {
   console.error(`Extension initialization failed: ${error.message}`);
-  window.VSC.logger.error(`Extension initialization failed: ${error.message}`);
+  window.VSC?.logger?.error(`Extension initialization failed: ${error.message}`);
 });
 
 // Export for testing

@@ -26,7 +26,7 @@ class AmazonHandler extends window.VSC.BaseSiteHandler {
    * @returns {Object} Positioning information
    */
   getControllerPosition(parent, video, options = {}) {
-    if (options.gifMode) {
+    if (options.gifMode || (video && video.tagName === 'CANVAS')) {
       return super.getControllerPosition(parent, video);
     }
     if (!video.classList.contains('vjs-tech')) {
@@ -45,6 +45,7 @@ class AmazonHandler extends window.VSC.BaseSiteHandler {
    * @returns {boolean} True if video should be ignored
    */
   shouldIgnoreVideo(video) {
+    if (!video || video.tagName !== 'VIDEO') return false;
     // Don't reject videos that are still loading
     if (video.readyState < 2) {
       return false;

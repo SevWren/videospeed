@@ -21,7 +21,7 @@ class NetflixHandler extends window.VSC.BaseSiteHandler {
    * @returns {Object} Positioning information
    */
   getControllerPosition(parent, video, options = {}) {
-    if (options.gifMode) {
+    if (options.gifMode || (video && video.tagName === 'CANVAS')) {
       return super.getControllerPosition(parent, video);
     }
     // Insert before parent to bypass Netflix's overlay
@@ -79,6 +79,7 @@ class NetflixHandler extends window.VSC.BaseSiteHandler {
    * @returns {boolean} True if video should be ignored
    */
   shouldIgnoreVideo(video) {
+    if (!video || video.tagName !== 'VIDEO') return false;
     // Ignore preview videos or thumbnails
     return (
       video.classList.contains('preview-video') ||

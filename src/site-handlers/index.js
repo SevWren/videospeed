@@ -60,9 +60,9 @@ class SiteHandlerManager {
    * @param {HTMLElement} video - Video element
    * @returns {Object} Positioning information
    */
-  getControllerPosition(parent, video) {
+  getControllerPosition(parent, video, options = {}) {
     const handler = this.getCurrentHandler();
-    return handler.getControllerPosition(parent, video);
+    return handler.getControllerPosition(parent, video, options);
   }
 
   /**

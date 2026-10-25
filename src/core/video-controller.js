@@ -12,6 +12,8 @@ class VideoController {
       return target.vsc;
     }
 
+    target.vsc = this;
+
     this.video = target;
     this.parent = target.parentElement || parent;
     this.config = config;
@@ -36,9 +38,6 @@ class VideoController {
 
     // Set up mutation observer for src changes
     this.setupMutationObserver();
-
-    // Attach controller to video element
-    target.vsc = this;
 
     window.VSC.logger.info('VideoController initialized for video element');
 
@@ -227,6 +226,7 @@ class VideoController {
    */
   setupEventHandlers() {
     const mediaEventAction = (event) => {
+      if (!event.target.currentSrc) { return; }
       let storedSpeed = this.config.settings.speeds[event.target.currentSrc];
 
       if (!this.config.settings.rememberSpeed) {

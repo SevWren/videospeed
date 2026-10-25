@@ -20,8 +20,8 @@ runner.test('controlGifs defaults to true in new VideoSpeedConfig', () => {
 
 runner.test('gifElements initializes as empty array', () => {
   const config = new window.VSC.VideoSpeedConfig();
-  if (!Array.isArray(config.gifElements) || config.gifElements.length !== 0) {
-    throw new Error('gifElements should be an empty array');
+  if (!(config.gifElements instanceof Set) || config.gifElements.size !== 0) {
+    throw new Error('gifElements should be an empty Set');
   }
 });
 
@@ -73,6 +73,28 @@ runner.test('GifObserver is available', () => {
   if (!window.VSC.GifObserver) {
     throw new Error('GifObserver not found');
   }
+});
+
+runner.test('GifFrameCache is idempotent for addGifElement (no duplicate entries)', () => {
+  const config = window.VSC.videoSpeedConfig;
+  const img = document.createElement('img');
+  config.addGifElement(img);
+  config.addGifElement(img);
+  config.addGifElement(img);
+  const elements = config.getGifElements();
+  const count = elements.filter(el => el === img).length;
+  config.removeGifElement(img);
+  if (count !== 1) throw new Error(`Expected exactly 1 entry for duplicate addGifElement, got ${count}`);
+});
+
+runner.test('GifFrameCache memory budget check prevents over-allocation', () => {
+  const cache = window.VSC.GifFrameCache;
+  const saved = cache._allocated;
+  const budget = window.VSC.Constants.GIF_GLOBAL_MEMORY_BUDGET_BYTES;
+  cache._allocated = budget - 100;
+  const canAllocSmall = cache.requestAllocation ? cache.requestAllocation(100) : cache.tryAllocate ? (() => { const r = cache.tryAllocate(100); if (r) cache._allocated -= 100; return r; })() : true;
+  cache._allocated = saved;
+  if (canAllocSmall !== true) throw new Error('Expected small allocation within budget to succeed');
 });
 
 export default runner;

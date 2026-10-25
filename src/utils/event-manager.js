@@ -177,7 +177,7 @@ class EventManager {
     window.VSC.logger.verbose(`Processing keydown event: key=${event.key}, keyCode=${keyCode}`);
 
     // Event deduplication - prevent same key event from being processed multiple times
-    const eventSignature = `${keyCode}_${event.timeStamp}_${event.type}`;
+    const eventSignature = `${keyCode}_${Math.round(event.timeStamp / 4)}_${event.type}`;
 
     if (this.lastKeyEventSignature === eventSignature) {
       if (logDiagnostic) {
@@ -208,7 +208,7 @@ class EventManager {
     }
 
     // Ignore keydown event if typing in an input box
-    if (this.isTypingContext(event.target)) {
+    if (this.isTypingContext(event)) {
       if (logDiagnostic) {
         this.logKeyBindingDiagnostic('ignored because target is a typing context', {
           target: this.summarizeElement(event.target),
@@ -293,11 +293,12 @@ class EventManager {
 
   /**
    * Check if user is typing in an input context
-   * @param {Element} target - Event target
+   * @param {Event|Element} event - Keyboard event or element
    * @returns {boolean} True if typing context
    * @private
    */
-  isTypingContext(target) {
+  isTypingContext(event) {
+    const target = (event.composedPath && event.composedPath()[0]) || event.target || event;
     return (
       target.nodeName === 'INPUT' || target.nodeName === 'TEXTAREA' || target.isContentEditable
     );
@@ -336,6 +337,8 @@ class EventManager {
     // Get the actual video element (handle shadow DOM)
     const video = event.composedPath()[0];
 
+    if (!(video instanceof HTMLMediaElement)) { return; }
+
     // Handle forced last saved speed
     if (this.config.settings.forceLastSavedSpeed) {
       if (event.detail && event.detail.origin === 'videoSpeed') {
@@ -362,6 +365,7 @@ class EventManager {
     }
 
     const speedIndicator = video.vsc.speedIndicator;
+    if (!speedIndicator) { return; }
     const src = video.currentSrc;
     const speed = Number(video.playbackRate.toFixed(2));
 
@@ -426,6 +430,9 @@ class EventManager {
     window.VSC.logger.info(
       `Showing controller temporarily (startHidden: ${this.config.settings.startHidden}, manual: ${controller.classList.contains('vsc-manual')})`
     );
+    controller.style.removeProperty('display');
+    controller.style.removeProperty('visibility');
+    controller.style.removeProperty('opacity');
     controller.classList.add('vsc-show');
 
     if (this.timer) {

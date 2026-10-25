@@ -9,6 +9,18 @@ class ActionHandler {
   constructor(config, eventManager) {
     this.config = config;
     this.eventManager = eventManager;
+    this._gifSpeedSaveTimer = null;
+    this._gifSpeedPendingSpeed = undefined;
+    this._visibilityFlushHandler = () => {
+      if (document.visibilityState === 'hidden' && this._gifSpeedSaveTimer) {
+        clearTimeout(this._gifSpeedSaveTimer);
+        this._gifSpeedSaveTimer = null;
+        this.config.settings.lastGifSpeed = this._gifSpeedPendingSpeed;
+        this.config.save({ lastGifSpeed: this._gifSpeedPendingSpeed });
+        this._gifSpeedPendingSpeed = undefined;
+      }
+    };
+    document.addEventListener('visibilitychange', this._visibilityFlushHandler);
   }
 
   /**
@@ -108,7 +120,11 @@ class ActionHandler {
     // Get the controller that was used if called from a button press event
     let targetController = null;
     if (e) {
-      targetController = e.target.getRootNode().host;
+      try {
+        targetController = e.target.getRootNode().host;
+      } catch (_rootErr) {
+        /* cross-origin shadow root */
+      }
     }
 
     mediaTags.forEach((v, index) => {
@@ -180,7 +196,7 @@ class ActionHandler {
       try {
         targetController = e.target.getRootNode().host;
       } catch (_rootErr) {
-        /* cross-origin shadow root */
+        return;
       }
     }
     gifElements.forEach((img) => {
@@ -198,7 +214,7 @@ class ActionHandler {
       if (showActions.includes(action)) {
         this.eventManager.showController(gc.div);
       }
-      if (!img.classList.contains('vsc-cancelled')) {
+      if (!img.vscGifIgnore && !img.gifController?.fetchFailed) {
         this.executeGifAction(action, value, img, e);
       }
     });
@@ -230,12 +246,14 @@ class ActionHandler {
       }
       case 'reset':
         gc.setSpeed(1.0);
-        this.config.settings.lastGifSpeed = 1.0;
-        this.config.save({ lastGifSpeed: 1.0 });
+        this._saveGifSpeedDebounced(1.0);
         break;
-      case 'fast':
-        gc.setSpeed(typeof value === 'number' ? value : 1.0);
+      case 'fast': {
+        const fastSpeed = (typeof value === 'number' && value > 0.1) ? value : 1.0;
+        gc.setSpeed(fastSpeed);
+        this._saveGifSpeedDebounced(fastSpeed);
         break;
+      }
       case 'pause':
         if (gc._userPaused) {
           gc.resume();
@@ -250,6 +268,11 @@ class ActionHandler {
       case 'blink':
         this.blinkController(gc.div, value);
         break;
+      case 'drag':
+        if (window.VSC.DragHandler?.handleDrag) {
+          window.VSC.DragHandler.handleDrag(gc._canvas, _e);
+        }
+        break;
       case 'rewind':
       case 'advance':
       case 'mark':
@@ -263,14 +286,28 @@ class ActionHandler {
   }
 
   _saveGifSpeedDebounced(speed) {
-    if (this._gifSpeedSaveTimer) {
-      clearTimeout(this._gifSpeedSaveTimer);
-    }
+    this._gifSpeedPendingSpeed = speed;
+    if (this._gifSpeedSaveTimer) { clearTimeout(this._gifSpeedSaveTimer); }
     this._gifSpeedSaveTimer = setTimeout(() => {
       this.config.settings.lastGifSpeed = speed;
       this.config.save({ lastGifSpeed: speed });
       this._gifSpeedSaveTimer = null;
+      this._gifSpeedPendingSpeed = undefined;
     }, window.VSC.Constants.GIF_SPEED_SAVE_DEBOUNCE_MS || 500);
+  }
+
+  cleanup() {
+    if (this._visibilityFlushHandler) {
+      document.removeEventListener('visibilitychange', this._visibilityFlushHandler);
+    }
+    if (this._gifSpeedSaveTimer) {
+      clearTimeout(this._gifSpeedSaveTimer);
+      if (typeof this._gifSpeedPendingSpeed === 'number') {
+        this.config.settings.lastGifSpeed = this._gifSpeedPendingSpeed;
+        this.config.save({ lastGifSpeed: this._gifSpeedPendingSpeed });
+      }
+      this._gifSpeedSaveTimer = null;
+    }
   }
 
   /**
@@ -426,6 +463,8 @@ class ActionHandler {
     const speedValue = speed.toFixed(2);
     const numericSpeed = Number(speedValue);
 
+    this.eventManager.refreshCoolDown();
+
     if (this.config.settings.forceLastSavedSpeed) {
       video.dispatchEvent(
         new CustomEvent('ratechange', {
@@ -454,7 +493,12 @@ class ActionHandler {
     if (this.config.settings.rememberSpeed) {
       const videoSrc = video.currentSrc || video.src;
       if (videoSrc) {
-        this.config.settings.speeds[videoSrc] = numericSpeed;
+        const speeds = this.config.settings.speeds;
+        if (!(videoSrc in speeds)) {
+          const keys = Object.keys(speeds);
+          if (keys.length >= 50) { delete speeds[keys[0]]; }
+        }
+        speeds[videoSrc] = numericSpeed;
         window.VSC.logger.debug(`Stored speed ${numericSpeed} for video: ${videoSrc}`);
       }
     }
@@ -464,8 +508,6 @@ class ActionHandler {
       lastSpeed: this.config.settings.lastSpeed,
       speeds: this.config.settings.speeds,
     });
-
-    this.eventManager.refreshCoolDown();
 
     window.VSC.logger.debug(`setSpeed finished: ${speed}`);
   }

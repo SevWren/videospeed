@@ -14,7 +14,7 @@ class VideoMutationObserver {
     this.onGifFound = onGifFound || null;
     this.onGifRemoved = onGifRemoved || null;
     this.observer = null;
-    this.shadowObservers = new Set();
+    this.shadowObservers = new Map();
   }
 
   /**
@@ -109,6 +109,8 @@ class VideoMutationObserver {
         window.VSC.GifObserver?.isGifElement(node)
       ) {
         this.onGifFound(node, node.parentNode || mutation.target);
+      } else if (node.gifController && node.gifController.pending !== true && this.onGifRemoved && !window.VSC.GifObserver?.isGifElement(node)) {
+        this.onGifRemoved(node);
       }
       return;
     }
@@ -206,7 +208,9 @@ class VideoMutationObserver {
   checkForVideoAndShadowRoot(node, parent, added) {
     // Only proceed with removal if node is missing from DOM
     if (!added && document.body?.contains(node)) {
-      return;
+      if (node.nodeName !== 'IMG' || !node.gifController || node.gifController.pending === true) {
+        return;
+      }
     }
 
     if (
@@ -229,7 +233,9 @@ class VideoMutationObserver {
           this.onGifFound &&
           window.VSC.GifObserver?.isGifElement(node)
         ) {
-          if (added && !node.vscGifIgnore) {
+          const srcChangedSinceTeardown = node._vscTeardownSrc !== undefined && node.src !== node._vscTeardownSrc;
+          const suppressedByIgnore = node.vscGifIgnore && !srcChangedSinceTeardown;
+          if (added && !suppressedByIgnore) {
             this.onGifFound(node, parent);
           } else if (!added) {
             if (
@@ -300,7 +306,7 @@ class VideoMutationObserver {
     };
 
     shadowObserver.observe(shadowRoot, observerOptions);
-    this.shadowObservers.add(shadowRoot);
+    this.shadowObservers.set(shadowRoot, shadowObserver);
 
     window.VSC.logger.debug('Shadow root observer added');
   }
@@ -324,9 +330,8 @@ class VideoMutationObserver {
     }
 
     // Clean up shadow observers
-    this.shadowObservers.forEach((_shadowRoot) => {
-      // Note: We can't access the observer directly, but disconnecting the main
-      // observer should handle most cases. Shadow observers will be garbage collected.
+    this.shadowObservers.forEach((obs) => {
+      obs.disconnect();
     });
     this.shadowObservers.clear();
 

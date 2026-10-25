@@ -21,7 +21,7 @@ class FacebookHandler extends window.VSC.BaseSiteHandler {
    * @returns {Object} Positioning information
    */
   getControllerPosition(parent, video, options = {}) {
-    if (options.gifMode) {
+    if (options.gifMode || (video && video.tagName === 'CANVAS')) {
       return super.getControllerPosition(parent, video);
     }
     // Facebook requires deep DOM traversal due to complex nesting
@@ -61,6 +61,7 @@ class FacebookHandler extends window.VSC.BaseSiteHandler {
    * @private
    */
   setupFacebookObserver(document) {
+    if (document.__vscFacebookObserver) return;
     // Facebook loads content dynamically, so we need to watch for new videos
     const observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
@@ -85,6 +86,7 @@ class FacebookHandler extends window.VSC.BaseSiteHandler {
     });
 
     this.facebookObserver = observer;
+    document.__vscFacebookObserver = observer;
     window.VSC.logger.debug('Facebook dynamic content observer set up');
   }
 
@@ -105,6 +107,7 @@ class FacebookHandler extends window.VSC.BaseSiteHandler {
    * @returns {boolean} True if video should be ignored
    */
   shouldIgnoreVideo(video) {
+    if (!video || video.tagName !== 'VIDEO') return false;
     // Ignore story videos and other non-main content
     return (
       video.closest('[data-story-id]') !== null ||
@@ -130,6 +133,7 @@ class FacebookHandler extends window.VSC.BaseSiteHandler {
     if (this.facebookObserver) {
       this.facebookObserver.disconnect();
       this.facebookObserver = null;
+      delete document.__vscFacebookObserver;
     }
   }
 }

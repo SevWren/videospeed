@@ -327,9 +327,16 @@ async function save_options() {
       blacklist: blacklist.replace(window.VSC.Constants.regStrip, ""),
       controlGifs: controlGifs,
       gifSpeedStep: Math.min(Math.max(gifSpeedStep, 0.01), 1.0),
+      lastGifSpeed: window.VSC.videoSpeedConfig?.settings?.lastGifSpeed ?? 1.0,
     };
 
     await window.VSC.videoSpeedConfig.save(settingsToSave);
+
+    try {
+      const gifMsgType = controlGifs ? 'VSC_ENABLE_GIF_CONTROL' : 'VSC_DISABLE_GIF_CONTROL';
+      const tabs = await chrome.tabs.query({});
+      tabs.forEach((tab) => { if (tab.id) chrome.tabs.sendMessage(tab.id, { type: gifMsgType }).catch(() => {}); });
+    } catch (_e) {}
 
     // Validate that settings were actually saved by reading them back
     await window.VSC.videoSpeedConfig.load();

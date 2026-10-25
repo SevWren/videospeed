@@ -26,20 +26,7 @@ class MediaElementObserver {
     mediaElements.push(...regularMedia);
 
     // Find media elements in shadow DOMs recursively
-    function findShadowMedia(root, selector) {
-      const results = [];
-      // Add any matching elements in current shadow root
-      results.push(...root.querySelectorAll(selector));
-      // Recursively check all elements with shadow roots
-      root.querySelectorAll('*').forEach((element) => {
-        if (element.shadowRoot) {
-          results.push(...findShadowMedia(element.shadowRoot, selector));
-        }
-      });
-      return results;
-    }
-
-    const shadowMedia = findShadowMedia(document, mediaTagSelector);
+    const shadowMedia = this._findShadowMedia(document, mediaTagSelector);
     mediaElements.push(...shadowMedia);
 
     // Find site-specific media elements
@@ -171,11 +158,30 @@ class MediaElementObserver {
   }
 
   /**
+   * Find media elements inside shadow DOMs recursively
+   * @param {Document|ShadowRoot} root - Root to search
+   * @param {string} selector - CSS selector
+   * @returns {Array} Found elements
+   * @private
+   */
+  _findShadowMedia(root, selector) {
+    const results = [];
+    results.push(...root.querySelectorAll(selector));
+    root.querySelectorAll('*').forEach((element) => {
+      if (element.shadowRoot) {
+        results.push(...this._findShadowMedia(element.shadowRoot, selector));
+      }
+    });
+    return results;
+  }
+
+  /**
    * Check if media element is valid for controller attachment
    * @param {HTMLMediaElement} media - Media element to check
    * @returns {boolean} True if valid
    */
   isValidMediaElement(media) {
+    if (!media || (media.tagName !== 'VIDEO' && media.tagName !== 'AUDIO')) { return false; }
     // Skip videos that are not in the DOM
     if (!media.isConnected) {
       window.VSC.logger.debug('Video not in DOM');
@@ -247,7 +253,9 @@ class MediaElementObserver {
     if (!window.VSC.GifObserver) {
       return [];
     }
-    const imgs = Array.from(doc.querySelectorAll('img'));
+    const lightImgs = Array.from(doc.querySelectorAll('img'));
+    const shadowImgs = this._findShadowMedia(doc, 'img');
+    const imgs = [...new Set([...lightImgs, ...shadowImgs])];
     return imgs.filter((img) => {
       if (img.gifController || img.vscGifIgnore) {
         return false;
@@ -258,7 +266,7 @@ class MediaElementObserver {
       // Only apply size filter when image has loaded (naturalWidth > 0).
       // naturalWidth = 0 means the image hasn't decoded yet — allow it through
       // so the GIF controller can attach; tiny tracker pixels are excluded once loaded.
-      if (img.naturalWidth > 0 || img.naturalHeight > 0) {
+      if (img.naturalWidth > 0 && img.naturalHeight > 0) {
         const w = img.naturalWidth || img.width || 0;
         const h = img.naturalHeight || img.height || 0;
         return w >= window.VSC.Constants.GIF_MIN_SIZE_PX && h >= window.VSC.Constants.GIF_MIN_SIZE_PX;

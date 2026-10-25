@@ -63,6 +63,7 @@
         "src/ui/*.js",
         "src/observers/*.js",
         "src/site-handlers/*.js",
+        "src/site-handlers/scripts/*.js",
         "src/content/*.js",
         "src/lib/*.js"
       ],

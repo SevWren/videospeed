@@ -98,10 +98,15 @@ if (!window.VSC.GifController) {
         gc._gifHeight = parsed.lsd.height;
         gc._loopCount = parsed.loopCount || 0;
 
-        // Check memory budget
+        // Check per-GIF size limit before allocating
         const frameBytes = gc._gifWidth * gc._gifHeight * 4 * frames.length;
+        if (frameBytes > window.VSC.Constants.GIF_FRAME_CACHE_LIMIT_BYTES) {
+          window.VSC.logger.info(`GIF too large to cache (${Math.round(frameBytes / 1024 / 1024)}MB) for ${src}`);
+          return null;
+        }
+        // Check global memory budget
         if (!window.VSC.GifFrameCache.requestAllocation(frameBytes)) {
-          window.VSC.logger.warn(`GIF memory budget exceeded for ${src}`);
+          window.VSC.logger.info(`GIF memory budget exceeded for ${src}`);
           return null;
         }
         window.VSC.GifFrameCache.confirmAllocation(frameBytes);

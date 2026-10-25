@@ -69,7 +69,7 @@ class ControlsManager {
         (e) => {
           e.stopPropagation();
         },
-        true
+        { capture: true, passive: true }
       );
     });
   }

@@ -5,3 +5,8 @@ dist
 tests/e2e/screenshots
 node_modules
 .idea
+.agents/
+.claude/
+.grok/
+chrome_console_log_events_1.txt
+skills-lock.json

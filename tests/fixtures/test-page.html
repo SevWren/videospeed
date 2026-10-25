@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Video Speed Controller Tests</title>
+  <title>Video Speed Controller Tests (Video &amp; GIF)</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -45,7 +45,7 @@
   </style>
 </head>
 <body>
-  <h1>Video Speed Controller Tests</h1>
+  <h1>Video Speed Controller Tests (Video &amp; GIF)</h1>
   
   <div class="test-section">
     <h2>Unit Tests</h2>
@@ -72,6 +72,8 @@
       <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" type="video/mp4">
       Your browser does not support the video tag.
     </video>
+    <!-- GIF test element for gif-integration.test.js -->
+    <img id="test-gif" src="https://media.giphy.com/media/ICOgUNjpvO0PC/giphy.gif" alt="Test GIF" width="200" height="200" style="display:block">
   </div>
   
   <script type="module">
@@ -140,6 +142,11 @@
         const { moduleIntegrationTestRunner } = await import('../integration/module-integration.test.js');
         const integrationResults = await moduleIntegrationTestRunner.run();
         resultsDiv.textContent += `Module Integration Tests: ${integrationResults.passed} passed, ${integrationResults.failed} failed\n`;
+
+        // GIF integration tests
+        const { gifIntegrationTestRunner } = await import('tests/integration/gif-integration.test.js');
+        const gifResults = await gifIntegrationTestRunner.run();
+        resultsDiv.textContent += `GIF Integration Tests: ${gifResults.passed} passed, ${gifResults.failed} failed\n`;
         
         // Test settings + storage integration
         const { VideoSpeedConfig } = await import('../../src/core/settings.js');

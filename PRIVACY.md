@@ -1,5 +1,5 @@
 # Privacy Policy
-Last updated: 05/01/2024
+Last updated: 2026-10-25
 
 ## Information Collection and Use
 We do not collect any health, financial and payment, authentication, personal communications, location, web history, user activity, website content information, or other types of personally identifiable information.
@@ -14,7 +14,12 @@ We do not collect any health, financial and payment, authentication, personal co
 * Web History: We do not collect any web history information.
 * User Activity: We do not collect any user activity data.
 * Website Content: We do not collect any content from the websites you visit.
+* Network Requests / GIF Decoding: The extension may issue `fetch()` requests to GIF image URLs found on pages you visit in order to decode and control their playback speed locally. These requests use `cache: force-cache` (browser cache first) and go directly to the origin hosting the GIF — never to extension-controlled servers. No GIF content or URL data is transmitted to the extension developers or any third party. This behavior can be disabled by turning off the `controlGifs` setting in the extension options.
 
+
+## chrome.storage
+
+The extension stores user preferences (playback speed, keyboard shortcuts, site settings) in `chrome.storage.sync`, which may sync across devices tied to the user's own Chrome profile. GIF speed preferences (`lastGifSpeed`, `gifSpeedStep`) are also stored in `chrome.storage.sync` and may sync across the user's own Chrome profile (devices). None of this data is ever transmitted outside the user's Google account sync — it is not accessible to the extension developers or any third party.
 
 ## Data Transfer and Sale
 We follow these standards to ensure the protection of your privacy:

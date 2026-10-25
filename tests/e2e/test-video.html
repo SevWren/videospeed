@@ -1,14 +1,35 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Video Speed Test</title>
+  <title>Video Speed + GIF Speed Controller Test</title>
 </head>
 <body>
-  <h1>Video Speed Controller Test</h1>
+  <h1>Video Speed Controller Test — Video & GIF</h1>
   <video controls width="640" height="480" loop muted>
     <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" type="video/mp4">
     <source src="https://www.w3schools.com/html/mov_bbb.mp4" type="video/mp4">
     Your browser does not support the video tag.
   </video>
+
+  <section>
+    <h2>GIF Speed Control Tests</h2>
+
+    <div>
+      <label>Standard GIF (src ends in .gif)</label><br>
+      <img id="test-gif-standard" src="https://media.giphy.com/media/ICOgUNjpvO0PC/giphy.gif" alt="Test animated GIF" width="320" height="240">
+    </div>
+
+    <div>
+      <label>Lazy-loaded GIF (src set after delay)</label><br>
+      <img id="test-gif-lazy" data-src="https://media.giphy.com/media/ICOgUNjpvO0PC/giphy.gif" alt="Lazy-loaded GIF" width="320" height="240">
+      <script>
+        setTimeout(function() {
+          document.getElementById('test-gif-lazy').src = document.getElementById('test-gif-lazy').dataset.src;
+        }, 2000);
+      </script>
+    </div>
+
+    <p>The extension should replace the above <code>&lt;img&gt;</code> elements with <code>&lt;canvas&gt;</code> elements and show a speed controller overlay on each.</p>
+  </section>
 </body>
 </html>

@@ -38,6 +38,8 @@ if (!window.VSC.GifController) {
       this._inPicture = false;
       this._positionWrapper = null;
       this._visibilityPauseTimer = null;
+      this._patchCanvas = null;
+      this._patchCtx = null;
       this.div = null;
       this.fetchFailed = false;
     }
@@ -340,9 +342,25 @@ if (!window.VSC.GifController) {
         this._savedRegion = { ...frame.dims };
       }
 
-      // Draw sub-image at its declared offset -- NOT at (0,0).
+      // Draw sub-image via an offscreen patch canvas so source-over compositing is
+      // used. putImageData() writes raw RGBA bytes and ignores globalCompositeOperation,
+      // meaning transparent pixels in the patch (alpha=0, "show previous layer") would
+      // erase the underlying composite pixels — producing black artifacts wherever a
+      // partial GIF frame is transparent. Drawing through a temp canvas with drawImage()
+      // uses source-over, leaving underlying pixels intact where the patch is transparent.
+      if (!this._patchCanvas) {
+        this._patchCanvas = document.createElement('canvas');
+        this._patchCtx = this._patchCanvas.getContext('2d');
+      }
+      if (this._patchCanvas.width !== frame.dims.width) {
+        this._patchCanvas.width = frame.dims.width;
+      }
+      if (this._patchCanvas.height !== frame.dims.height) {
+        this._patchCanvas.height = frame.dims.height;
+      }
       const imageData = new ImageData(frame.patch, frame.dims.width, frame.dims.height);
-      this._compositeCtx.putImageData(imageData, frame.dims.left, frame.dims.top);
+      this._patchCtx.putImageData(imageData, 0, 0);
+      this._compositeCtx.drawImage(this._patchCanvas, frame.dims.left, frame.dims.top);
 
       // Copy composite to the visible canvas.
       this._visibleCtx.clearRect(0, 0, this._gifWidth, this._gifHeight);
@@ -564,6 +582,8 @@ if (!window.VSC.GifController) {
         this._visibleCtx = null;
         this._compositeCtx = null;
         this._compositeCanvas = null;
+        this._patchCanvas = null;
+        this._patchCtx = null;
         // 6. Release memory budget
         if (this._allocatedBytes > 0) {
           window.VSC.GifFrameCache.releaseAllocation(this._allocatedBytes);

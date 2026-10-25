@@ -73,8 +73,13 @@ if (!window.VSC.GifController) {
         try {
           if (!src.startsWith('data:')) {
             resolvedSrc = new URL(src, document.baseURI).href;
-            origin = new URL(resolvedSrc).origin;
-            if (window.VSC.gifFetchFailCache && window.VSC.gifFetchFailCache.has(origin)) {
+            const rawOrigin = new URL(resolvedSrc).origin;
+            // file:// URLs all return the string "null" as their origin.  Using
+            // "null" as a cache key would cause one failed local GIF to blacklist
+            // every local file for the whole session.  Leave origin=null so the
+            // failure cache is simply not consulted for local files.
+            origin = (rawOrigin === 'null') ? null : rawOrigin;
+            if (origin && window.VSC.gifFetchFailCache && window.VSC.gifFetchFailCache.has(origin)) {
               const entry = window.VSC.gifFetchFailCache.get(origin);
               if (entry && (entry.permanent || (entry.until && Date.now() < entry.until))) {
                 return null;
@@ -315,6 +320,33 @@ if (!window.VSC.GifController) {
             bytes[i] = binary.charCodeAt(i);
           }
           return bytes.buffer;
+        }
+
+        // Local file:// URLs — CORS mode is inapplicable for the file: scheme and
+        // causes Chrome to block the request entirely.  Use XMLHttpRequest instead,
+        // which works for same-origin file:// resources in extension content scripts
+        // (requires "Allow access to file URLs" in chrome://extensions/).
+        // file:// responses also carry no Content-Type header, so skip that check.
+        if (src.startsWith('file://')) {
+          return new Promise((resolve) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', src, true);
+            xhr.responseType = 'arraybuffer';
+            xhr.onload = () => {
+              // file:// XHR returns status 0 on success (no HTTP status codes)
+              if (xhr.status === 0 || (xhr.status >= 200 && xhr.status < 300)) {
+                resolve(xhr.response);
+              } else {
+                window.VSC.logger.debug(`Local GIF XHR non-success status ${xhr.status} for ${src}`);
+                resolve(null);
+              }
+            };
+            xhr.onerror = () => {
+              window.VSC.logger.debug(`Local GIF XHR error for ${src} — ensure "Allow access to file URLs" is enabled in chrome://extensions/`);
+              resolve(null);
+            };
+            xhr.send();
+          });
         }
 
         const response = await fetch(src, { mode: 'cors', cache: 'default' });

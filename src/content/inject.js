@@ -374,7 +374,12 @@ class VideoSpeedExtension {
         img.vscGifFailed = true;
         delete img.gifController;
       } else if (!document.body?.contains(img)) {
-        gc.remove();
+        // GifController.create() removes the img from the DOM (canvas replacement).
+        // Only tear down if the canvas is also missing — that means the page
+        // navigated away while creation was in progress.
+        if (!(gc._canvas && document.body?.contains(gc._canvas))) {
+          gc.remove();
+        }
       }
     } catch (error) {
       delete img.gifController;

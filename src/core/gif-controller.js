@@ -118,6 +118,15 @@ if (!window.VSC.GifController) {
         // When the Netscape extension is absent gifuct returns undefined/null;
         // default to 0 (infinite) to match what every browser does.
         gc._loopCount = (parsed.loopCount == null) ? 0 : parsed.loopCount;
+        // Stash the GIF background color (from LSD + GCT) so we can pre-fill
+        // the composite canvas.  Many GIFs use transparent pixels to mean
+        // "show the background", so starting with the right background avoids
+        // those areas appearing as transparent-black.
+        const bgIdx = parsed.lsd?.backgroundColorIndex;
+        gc._bgColor =
+          (bgIdx != null && parsed.gct && parsed.gct[bgIdx])
+            ? parsed.gct[bgIdx]
+            : null;
 
         // Check per-GIF size limit before allocating (need frame count estimate from parsed)
         // We use parsed.frames.length if available, else defer to after decompressFrames
@@ -223,6 +232,16 @@ if (!window.VSC.GifController) {
           return null;
         } // Canvas 2D not available (CSP restriction)
 
+        // Pre-fill composite canvas with the GIF's declared background colour.
+        // GIFs that use transparent pixels to "show the background" (e.g. eye
+        // whites on a white page) rely on this; without it those areas render
+        // as transparent-black on the canvas.
+        if (gc._bgColor) {
+          const { r, g, b } = gc._bgColor;
+          gc._compositeCtx.fillStyle = `rgb(${r},${g},${b})`;
+          gc._compositeCtx.fillRect(0, 0, gc._gifWidth, gc._gifHeight);
+        }
+
         // DOM insertion
         const isPicture =
           imgElement.parentElement && imgElement.parentElement.tagName === 'PICTURE';
@@ -278,6 +297,12 @@ if (!window.VSC.GifController) {
 
         // Set up src mutation observer
         gc._setupTargetObserver();
+
+        // Draw frame 0 immediately so the canvas is never blank during the
+        // initial effectiveDelay (which can exceed 100 ms at slower speeds).
+        gc._drawFrame(0);
+        gc._frameIdx = frames.length > 1 ? 1 : 0;
+        gc._framesDrawn = 1;
 
         // Start animation loop
         gc._lastFrameTime = performance.now();
@@ -417,19 +442,26 @@ if (!window.VSC.GifController) {
         const prevIndex = frameIndex === 0 ? this._frames.length - 1 : frameIndex - 1;
         const prev = this._frames[prevIndex];
         if (prev.disposalType === 2) {
-          // Restore to background. The GIF spec says to use the LSD backgroundColorIndex,
-          // but Chrome/Firefox/Safari all treat disposal=2 as "restore to transparent"
-          // regardless of that index value — virtually every web-optimised GIF relies on
-          // this non-spec convention. Filling with the GCT background colour (often index 0
-          // = black) instead produces opaque-black artifacts wherever the next frame's
-          // transparent pixels leave that filled region exposed (source-over compositing
-          // preserves it instead of overwriting it). Always clear to transparent.
-          this._compositeCtx.clearRect(
-            prev.dims.left,
-            prev.dims.top,
-            prev.dims.width,
-            prev.dims.height
-          );
+          // Restore to background.  Use the GIF's declared background colour
+          // when available (stored on _bgColor from the LSD+GCT at create
+          // time), otherwise clear to transparent.  This prevents transparent-
+          // pixel regions in subsequent frames from showing black instead of
+          // the intended background (e.g. eye whites on a white background).
+          if (this._bgColor) {
+            const { r, g, b } = this._bgColor;
+            this._compositeCtx.fillStyle = `rgb(${r},${g},${b})`;
+            this._compositeCtx.fillRect(
+              prev.dims.left, prev.dims.top,
+              prev.dims.width, prev.dims.height
+            );
+          } else {
+            this._compositeCtx.clearRect(
+              prev.dims.left,
+              prev.dims.top,
+              prev.dims.width,
+              prev.dims.height
+            );
+          }
         } else if (prev.disposalType === 3 && this._savedPixels) {
           this._compositeCtx.putImageData(
             this._savedPixels,
@@ -641,7 +673,14 @@ if (!window.VSC.GifController) {
                           this._parsed = parsed;
                           this._frameIdx = 0; this._framesDrawn = 0;
                           this._savedPixels = null; this._savedRegion = null;
-                          if (this._compositeCtx) this._compositeCtx.clearRect(0, 0, this._gifWidth, this._gifHeight);
+                          if (this._compositeCtx) {
+                            this._compositeCtx.clearRect(0, 0, this._gifWidth, this._gifHeight);
+                            if (this._bgColor) {
+                              const { r, g, b } = this._bgColor;
+                              this._compositeCtx.fillStyle = `rgb(${r},${g},${b})`;
+                              this._compositeCtx.fillRect(0, 0, this._gifWidth, this._gifHeight);
+                            }
+                          }
                         }
                       }
                     } catch (_redecodeErr) {

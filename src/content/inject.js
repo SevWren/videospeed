@@ -199,8 +199,10 @@ class VideoSpeedExtension {
           `Attached controllers to ${lightMedia.length} media elements (light scan)`
         );
 
-        // Schedule comprehensive scan for later if needed
-        if (lightMedia.length === 0 || gifImgs.length === 0) {
+        // Only do comprehensive scan if BOTH video AND gif scans found nothing.
+        // The previous || caused a redundant 1-second re-scan on every file://
+        // GIF page (no videos → lightMedia.length===0 always true).
+        if (lightMedia.length === 0 && gifImgs.length === 0) {
           this.scheduleComprehensiveScan(document);
         }
       } catch (error) {

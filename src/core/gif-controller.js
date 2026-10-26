@@ -322,57 +322,54 @@ if (!window.VSC.GifController) {
           return bytes.buffer;
         }
 
-        // Local file:// URLs — CORS mode is inapplicable for the file: scheme and
-        // causes Chrome to block the request entirely.  Use XMLHttpRequest instead,
-        // which works for same-origin file:// resources in extension content scripts
-        // (requires "Allow access to file URLs" in chrome://extensions/).
-        // file:// responses also carry no Content-Type header, so skip that check.
+        // Local file:// URLs — injected page scripts run in the null origin of a
+        // file:// page and cannot XHR other file:// resources directly.  Route the
+        // request through the content script bridge (injector.js), which runs in the
+        // extension's isolated world and CAN access file:// resources when the user
+        // has enabled "Allow access to file URLs" in chrome://extensions/.
         if (src.startsWith('file://')) {
           return new Promise((resolve) => {
-            try {
-              const xhr = new XMLHttpRequest();
-              xhr.open('GET', src, true);
-              xhr.responseType = 'arraybuffer';
-              // 8-second timeout prevents the Promise from hanging forever when the
-              // path resolves to a network mount, a USB drive that was ejected, or
-              // any other source where local I/O can stall indefinitely.
-              xhr.timeout = 8000;
-              xhr.onload = () => {
-                // file:// XHR returns status 0 on success (no HTTP status codes).
-                if (xhr.status === 0 || (xhr.status >= 200 && xhr.status < 300)) {
-                  if (!xhr.response || xhr.response.byteLength === 0) {
-                    // Nominally-successful load but empty or null response buffer —
-                    // treat as failure rather than passing garbage to gifuct.
-                    window.VSC.logger.debug(`Local GIF XHR returned empty response for ${src}`);
-                    resolve(null);
-                  } else {
-                    resolve(xhr.response);
-                  }
+            const requestId = `vsc-gif-${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
+            let timeoutHandle;
+
+            const messageHandler = (event) => {
+              if (
+                event.data?.type === 'VSC_GIF_BYTES_RESPONSE' &&
+                event.data.requestId === requestId
+              ) {
+                clearTimeout(timeoutHandle);
+                window.removeEventListener('message', messageHandler);
+                if (event.data.success && event.data.bytes) {
+                  resolve(event.data.bytes);
                 } else {
-                  window.VSC.logger.debug(
-                    `Local GIF XHR non-success status ${xhr.status} for ${src}`
-                  );
+                  if (event.data.error === 'blocked') {
+                    window.VSC.logger.warn(
+                      `Local GIF blocked — enable "Allow access to file URLs" in chrome://extensions/ to use GIF speed control on local files (${src})`
+                    );
+                  } else if (event.data.error === 'timeout') {
+                    window.VSC.logger.debug(
+                      `Local GIF fetch timed out after 8 s — file may be on a slow or disconnected drive (${src})`
+                    );
+                  }
                   resolve(null);
                 }
-              };
-              xhr.onerror = () => {
-                window.VSC.logger.warn(
-                  `Local GIF blocked — enable "Allow access to file URLs" in chrome://extensions/ to use GIF speed control on local files (${src})`
-                );
-                resolve(null);
-              };
-              xhr.ontimeout = () => {
-                window.VSC.logger.debug(
-                  `Local GIF XHR timed out after 8 s — file may be on a slow or disconnected network drive (${src})`
-                );
-                resolve(null);
-              };
-              xhr.send();
-            } catch (xhrErr) {
-              // xhr.open() or xhr.send() threw synchronously (malformed URL, etc.)
-              window.VSC.logger.debug(`Local GIF XHR setup error for ${src}: ${xhrErr.message}`);
+              }
+            };
+
+            window.addEventListener('message', messageHandler);
+
+            // Ask the content script bridge to fetch the bytes.
+            window.dispatchEvent(
+              new CustomEvent('VSC_FETCH_GIF_BYTES', { detail: { url: src, requestId } })
+            );
+
+            // 10 s outer timeout: guard against the bridge never responding (e.g.
+            // injector.js was not loaded, or the content script world was torn down).
+            timeoutHandle = setTimeout(() => {
+              window.removeEventListener('message', messageHandler);
+              window.VSC.logger.debug(`Local GIF bridge timed out (no response) for ${src}`);
               resolve(null);
-            }
+            }, 10000);
           });
         }
 

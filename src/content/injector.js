@@ -205,6 +205,62 @@ function setupMessageBridge() {
     console.warn('[VSC keybinding diagnostic][content bridge]', event.detail);
   });
 
+  // Proxy file:// GIF byte fetches for the injected page scripts.
+  // Injected page scripts run in the null origin of a file:// page and cannot XHR
+  // other file:// resources.  Content scripts CAN, provided the user has enabled
+  // "Allow access to file URLs" in chrome://extensions/.
+  window.addEventListener('VSC_FETCH_GIF_BYTES', (event) => {
+    const { url, requestId } = event.detail || {};
+    if (!url || !requestId || !url.startsWith('file://')) return;
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', url, true);
+    xhr.responseType = 'arraybuffer';
+    xhr.timeout = 8000;
+
+    xhr.onload = () => {
+      if (
+        (xhr.status === 0 || (xhr.status >= 200 && xhr.status < 300)) &&
+        xhr.response &&
+        xhr.response.byteLength > 0
+      ) {
+        window.postMessage(
+          { type: 'VSC_GIF_BYTES_RESPONSE', requestId, success: true, bytes: xhr.response },
+          '*',
+          [xhr.response]
+        );
+      } else {
+        window.postMessage({ type: 'VSC_GIF_BYTES_RESPONSE', requestId, success: false }, '*');
+      }
+    };
+
+    xhr.onerror = () => {
+      console.warn(
+        `[VSC] Local GIF blocked — enable "Allow access to file URLs" in chrome://extensions/ for GIF speed control on local files (${url})`
+      );
+      window.postMessage(
+        { type: 'VSC_GIF_BYTES_RESPONSE', requestId, success: false, error: 'blocked' },
+        '*'
+      );
+    };
+
+    xhr.ontimeout = () => {
+      window.postMessage(
+        { type: 'VSC_GIF_BYTES_RESPONSE', requestId, success: false, error: 'timeout' },
+        '*'
+      );
+    };
+
+    try {
+      xhr.send();
+    } catch (e) {
+      window.postMessage(
+        { type: 'VSC_GIF_BYTES_RESPONSE', requestId, success: false, error: e.message },
+        '*'
+      );
+    }
+  });
+
   // Listen for controller lifecycle events from injected page context
   window.addEventListener('VSC_CONTROLLER_CREATED', (event) => {
     // Forward controller creation to background script for icon management

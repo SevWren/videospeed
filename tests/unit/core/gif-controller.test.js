@@ -44,74 +44,98 @@ runner.test('GifController.create returns null for empty src', async () => {
   if (result !== null) { throw new Error('Expected null for empty src'); }
 });
 
-// ─── file:// XHR path tests ────────────────────────────────────────────────
+// ─── file:// bridge path tests ──────────────────────────────────────────────
+// The injected page script cannot XHR file:// URLs directly; it delegates to
+// the content script bridge (injector.js) via VSC_FETCH_GIF_BYTES CustomEvent
+// and receives bytes back via window.postMessage / VSC_GIF_BYTES_RESPONSE.
 
-// Helper: install a fake XMLHttpRequest on the global so we can control what
-// the XHR path returns without real file I/O.
-function withFakeXHR(behavior, fn) {
-  const OrigXHR = global.XMLHttpRequest;
-  global.XMLHttpRequest = class FakeXHR {
-    constructor() {
-      this.responseType = '';
-      this.timeout = 0;
-      this.status = 0;
-      this.response = null;
-      this.onload = null;
-      this.onerror = null;
-      this.ontimeout = null;
-    }
-    open(_method, _url, _async) {}
-    send() {
-      // Defer so the Promise constructor finishes first
-      setTimeout(() => behavior(this), 0);
-    }
+// Helper: simulate the content-script bridge for a single _fetchGifBytes call.
+// `behavior(requestId)` is called when the CustomEvent fires; it should post
+// back the fake response (or do nothing to simulate a missing bridge).
+function withFakeBridge(behavior, fn) {
+  const handler = (event) => {
+    const { requestId } = event.detail || {};
+    if (!requestId) return;
+    behavior(requestId);
   };
+  window.addEventListener('VSC_FETCH_GIF_BYTES', handler);
   const result = fn();
-  // Restore after the microtask queue drains (end of current test)
-  return result.finally ? result.finally(() => { global.XMLHttpRequest = OrigXHR; })
-    : (global.XMLHttpRequest = OrigXHR, result);
+  const cleanup = () => window.removeEventListener('VSC_FETCH_GIF_BYTES', handler);
+  return result && result.finally ? result.finally(cleanup) : (cleanup(), result);
 }
 
-runner.test('_fetchGifBytes: file:// success (status=0) returns ArrayBuffer', async () => {
+runner.test('_fetchGifBytes: file:// bridge success returns ArrayBuffer', async () => {
   const buf = new ArrayBuffer(8);
-  const result = await withFakeXHR((xhr) => {
-    xhr.status = 0;
-    xhr.response = buf;
-    if (xhr.onload) xhr.onload();
+  const result = await withFakeBridge((requestId) => {
+    setTimeout(() => {
+      window.postMessage(
+        { type: 'VSC_GIF_BYTES_RESPONSE', requestId, success: true, bytes: buf },
+        '*'
+      );
+    }, 0);
   }, () => window.VSC.GifController._fetchGifBytes('file:///D:/test.gif', null));
-  if (result !== buf) throw new Error(`Expected the ArrayBuffer, got ${result}`);
+  if (!(result instanceof ArrayBuffer) || result.byteLength !== 8) {
+    throw new Error(`Expected 8-byte ArrayBuffer, got ${result}`);
+  }
 });
 
-runner.test('_fetchGifBytes: file:// empty response returns null', async () => {
-  const result = await withFakeXHR((xhr) => {
-    xhr.status = 0;
-    xhr.response = new ArrayBuffer(0); // byteLength === 0
-    if (xhr.onload) xhr.onload();
-  }, () => window.VSC.GifController._fetchGifBytes('file:///D:/empty.gif', null));
-  if (result !== null) throw new Error(`Expected null for empty response, got ${result}`);
-});
-
-runner.test('_fetchGifBytes: file:// null response returns null', async () => {
-  const result = await withFakeXHR((xhr) => {
-    xhr.status = 0;
-    xhr.response = null;
-    if (xhr.onload) xhr.onload();
-  }, () => window.VSC.GifController._fetchGifBytes('file:///D:/null.gif', null));
-  if (result !== null) throw new Error(`Expected null for null response, got ${result}`);
-});
-
-runner.test('_fetchGifBytes: file:// onerror returns null (permission denied)', async () => {
-  const result = await withFakeXHR((xhr) => {
-    if (xhr.onerror) xhr.onerror();
+runner.test('_fetchGifBytes: file:// bridge blocked returns null', async () => {
+  const result = await withFakeBridge((requestId) => {
+    setTimeout(() => {
+      window.postMessage(
+        { type: 'VSC_GIF_BYTES_RESPONSE', requestId, success: false, error: 'blocked' },
+        '*'
+      );
+    }, 0);
   }, () => window.VSC.GifController._fetchGifBytes('file:///D:/blocked.gif', null));
-  if (result !== null) throw new Error(`Expected null on XHR error, got ${result}`);
+  if (result !== null) throw new Error(`Expected null for blocked, got ${result}`);
 });
 
-runner.test('_fetchGifBytes: file:// timeout returns null', async () => {
-  const result = await withFakeXHR((xhr) => {
-    if (xhr.ontimeout) xhr.ontimeout();
+runner.test('_fetchGifBytes: file:// bridge timeout returns null', async () => {
+  const result = await withFakeBridge((requestId) => {
+    setTimeout(() => {
+      window.postMessage(
+        { type: 'VSC_GIF_BYTES_RESPONSE', requestId, success: false, error: 'timeout' },
+        '*'
+      );
+    }, 0);
   }, () => window.VSC.GifController._fetchGifBytes('file:///D:/slow.gif', null));
-  if (result !== null) throw new Error(`Expected null on XHR timeout, got ${result}`);
+  if (result !== null) throw new Error(`Expected null for timeout, got ${result}`);
+});
+
+runner.test('_fetchGifBytes: file:// bridge empty bytes returns null', async () => {
+  const result = await withFakeBridge((requestId) => {
+    setTimeout(() => {
+      // success:true but no bytes — treated as failure
+      window.postMessage(
+        { type: 'VSC_GIF_BYTES_RESPONSE', requestId, success: false },
+        '*'
+      );
+    }, 0);
+  }, () => window.VSC.GifController._fetchGifBytes('file:///D:/empty.gif', null));
+  if (result !== null) throw new Error(`Expected null for empty bytes, got ${result}`);
+});
+
+runner.test('_fetchGifBytes: file:// unrelated postMessage is ignored', async () => {
+  // A postMessage with a different requestId must not resolve the promise early.
+  const buf = new ArrayBuffer(4);
+  const result = await withFakeBridge((requestId) => {
+    setTimeout(() => {
+      // Wrong requestId first
+      window.postMessage(
+        { type: 'VSC_GIF_BYTES_RESPONSE', requestId: 'other-id', success: true, bytes: new ArrayBuffer(1) },
+        '*'
+      );
+      // Then correct one
+      window.postMessage(
+        { type: 'VSC_GIF_BYTES_RESPONSE', requestId, success: true, bytes: buf },
+        '*'
+      );
+    }, 0);
+  }, () => window.VSC.GifController._fetchGifBytes('file:///D:/test2.gif', null));
+  if (!(result instanceof ArrayBuffer) || result.byteLength !== 4) {
+    throw new Error(`Expected 4-byte ArrayBuffer from correct requestId, got ${result}`);
+  }
 });
 
 runner.test('_fetchGifBytes: https:// URLs still go through fetch (not XHR)', async () => {

@@ -244,6 +244,11 @@ class VideoMutationObserver {
             if (
               this.onGifRemoved &&
               node.gifController &&
+              node.gifController.pending !== true &&
+              // If the controller's canvas is still in the DOM the img was
+              // intentionally removed as part of canvas-replacement — skip.
+              !(node.gifController._canvas &&
+                document.body?.contains(node.gifController._canvas)) &&
               typeof node.gifController.remove === 'function'
             ) {
               this.onGifRemoved(node);

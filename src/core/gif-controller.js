@@ -289,9 +289,10 @@ if (!window.VSC.GifController) {
         document.addEventListener('visibilitychange', gc._visibilityChangeHandler);
 
         // Dispatch controller created event
+        gc._controllerId = `gif-${Date.now()}`;
         window.dispatchEvent(
           new CustomEvent('VSC_CONTROLLER_CREATED', {
-            detail: { controllerId: `gif-${Date.now()}` },
+            detail: { controllerId: gc._controllerId },
           })
         );
 
@@ -749,7 +750,7 @@ if (!window.VSC.GifController) {
         // 13. Dispatch removed event
         window.dispatchEvent(
           new CustomEvent('VSC_CONTROLLER_REMOVED', {
-            detail: { controllerId: 'gif' },
+            detail: { controllerId: this._controllerId || 'gif' },
           })
         );
       } catch (err) {

@@ -16,6 +16,9 @@
     "activeTab",
     "tabs"
   ],
+  "host_permissions": [
+    "file://*"
+  ],
   "background": {
     "service_worker": "src/background.js"
   },
@@ -65,7 +68,9 @@
         "src/site-handlers/*.js",
         "src/site-handlers/scripts/*.js",
         "src/content/*.js",
-        "src/lib/*.js"
+        "src/lib/*.js",
+        "src/gif-file-fetcher.html",
+        "src/gif-file-fetcher.js"
       ],
       "matches": [
         "http://*/*",

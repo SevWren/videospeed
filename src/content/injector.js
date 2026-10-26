@@ -205,61 +205,71 @@ function setupMessageBridge() {
     console.warn('[VSC keybinding diagnostic][content bridge]', event.detail);
   });
 
-  // Proxy file:// GIF byte fetches for the injected page scripts.
-  // Injected page scripts run in the null origin of a file:// page and cannot XHR
-  // other file:// resources.  Content scripts CAN, provided the user has enabled
-  // "Allow access to file URLs" in chrome://extensions/.
-  window.addEventListener('VSC_FETCH_GIF_BYTES', (event) => {
-    const { url, requestId } = event.detail || {};
-    if (!url || !requestId || !url.startsWith('file://')) return;
+  // ── File:// GIF byte fetch proxy ─────────────────────────────────────────
+  // PROBLEM: every XHR/fetch on a file:// page — whether from a page script
+  // or a content script — runs with origin 'null'.  Chrome blocks cross-origin
+  // XHR from null origin to file:// URLs with a CORS error.
+  //
+  // SOLUTION: embed a hidden <iframe> whose src is a chrome-extension:// page
+  // (src/gif-file-fetcher.html).  That page runs at chrome-extension:// origin,
+  // which IS in Chrome's allowed list.  The iframe performs the XHR and posts
+  // the ArrayBuffer back to the parent window via window.parent.postMessage,
+  // where gif-controller.js's existing 'message' listener receives it.
+  //
+  // Protocol (defined in gif-file-fetcher.js):
+  //   injector → iframe : { type:'VSC_GIF_FETCH_REQUEST', url, requestId }
+  //   iframe → parent  : { type:'VSC_GIF_BYTES_RESPONSE', requestId, success, bytes? }
+  //   iframe → parent  : { type:'VSC_GIF_FETCHER_READY' }  (once, on DOMContentLoaded)
+  (function setupFileGifFetcherProxy() {
+    if (!location.href.startsWith('file://')) return; // Only needed on file:// pages
 
-    const xhr = new XMLHttpRequest();
-    xhr.open('GET', url, true);
-    xhr.responseType = 'arraybuffer';
-    xhr.timeout = 8000;
+    let fetcherIframe = null;
+    let iframeReady = false;
+    const pending = []; // Requests that arrived before iframe finished loading
 
-    xhr.onload = () => {
-      if (
-        (xhr.status === 0 || (xhr.status >= 200 && xhr.status < 300)) &&
-        xhr.response &&
-        xhr.response.byteLength > 0
-      ) {
-        window.postMessage(
-          { type: 'VSC_GIF_BYTES_RESPONSE', requestId, success: true, bytes: xhr.response },
-          '*',
-          [xhr.response]
-        );
-      } else {
-        window.postMessage({ type: 'VSC_GIF_BYTES_RESPONSE', requestId, success: false }, '*');
-      }
-    };
+    function ensureIframe() {
+      if (fetcherIframe) return;
+      fetcherIframe = document.createElement('iframe');
+      fetcherIframe.src = chrome.runtime.getURL('src/gif-file-fetcher.html');
+      fetcherIframe.style.cssText =
+        'display:none!important;position:absolute!important;' +
+        'width:0!important;height:0!important;border:0!important;' +
+        'pointer-events:none!important;';
+      fetcherIframe.setAttribute('aria-hidden', 'true');
+      (document.body || document.documentElement).appendChild(fetcherIframe);
+    }
 
-    xhr.onerror = () => {
-      console.warn(
-        `[VSC] Local GIF blocked — enable "Allow access to file URLs" in chrome://extensions/ for GIF speed control on local files (${url})`
-      );
-      window.postMessage(
-        { type: 'VSC_GIF_BYTES_RESPONSE', requestId, success: false, error: 'blocked' },
-        '*'
-      );
-    };
-
-    xhr.ontimeout = () => {
-      window.postMessage(
-        { type: 'VSC_GIF_BYTES_RESPONSE', requestId, success: false, error: 'timeout' },
-        '*'
-      );
-    };
-
-    try {
-      xhr.send();
-    } catch (e) {
-      window.postMessage(
-        { type: 'VSC_GIF_BYTES_RESPONSE', requestId, success: false, error: e.message },
-        '*'
+    function dispatchToIframe(url, requestId) {
+      fetcherIframe.contentWindow.postMessage(
+        { type: 'VSC_GIF_FETCH_REQUEST', url, requestId },
+        '*' // iframe at chrome-extension:// validates type internally
       );
     }
-  });
+
+    // Handle the iframe's ready signal and flush pending queue.
+    // VSC_GIF_BYTES_RESPONSE messages are NOT re-dispatched here — they arrive
+    // on the page window directly from iframe.postMessage(parent) and are
+    // handled by gif-controller.js's window.addEventListener('message').
+    window.addEventListener('message', (event) => {
+      if (!event.data || typeof event.data !== 'object') return;
+      if (event.data.type !== 'VSC_GIF_FETCHER_READY') return;
+      iframeReady = true;
+      pending.forEach(({ url, requestId }) => dispatchToIframe(url, requestId));
+      pending.length = 0;
+    });
+
+    // Receive requests from the page world (gif-controller.js).
+    window.addEventListener('VSC_FETCH_GIF_BYTES', (event) => {
+      const { url, requestId } = event.detail || {};
+      if (!url || !requestId || !url.startsWith('file://')) return;
+      ensureIframe();
+      if (iframeReady) {
+        dispatchToIframe(url, requestId);
+      } else {
+        pending.push({ url, requestId });
+      }
+    });
+  })();
 
   // Listen for controller lifecycle events from injected page context
   window.addEventListener('VSC_CONTROLLER_CREATED', (event) => {

@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>VSC GIF File Fetcher</title>
+</head>
+<body>
+  <!--
+    This extension page runs at chrome-extension:// origin and proxies
+    file:// GIF byte fetches for gif-controller.js (which runs in the null
+    origin of the file:// page and cannot XHR file:// URLs directly).
+    See gif-file-fetcher.js for the protocol.
+  -->
+  <script src="gif-file-fetcher.js"></script>
+</body>
+</html>

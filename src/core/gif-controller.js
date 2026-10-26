@@ -114,7 +114,10 @@ if (!window.VSC.GifController) {
 
         gc._gifWidth = parsed.lsd.width;
         gc._gifHeight = parsed.lsd.height;
-        gc._loopCount = parsed.loopCount == null ? 1 : parsed.loopCount;
+        // loopCount = 0 means infinite (Netscape extension convention).
+        // When the Netscape extension is absent gifuct returns undefined/null;
+        // default to 0 (infinite) to match what every browser does.
+        gc._loopCount = (parsed.loopCount == null) ? 0 : parsed.loopCount;
 
         // Check per-GIF size limit before allocating (need frame count estimate from parsed)
         // We use parsed.frames.length if available, else defer to after decompressFrames

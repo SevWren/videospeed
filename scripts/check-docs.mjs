@@ -60,7 +60,7 @@ export function extractPathReferences(src) {
 
   // Pattern: backtick-quoted concrete file path `src/dir/file.ext`
   // Must end with a known extension; must not contain * or @ (glob/SHA markers)
-  const backtickRe = /`((?:src|docs|tests|scripts)\/[^`\s*@]+\.(?:js|mjs|md|json|css|html))`/g;
+  const backtickRe = /`((?:src|docs|tests|scripts|\.claude)\/[^`\s*@]+\.(?:js|mjs|md|json|css|html|yml|yaml))`/g;
   while ((m = backtickRe.exec(src)) !== null) {
     const p = m[1];
     if (isConcreteFilePath(p)) {

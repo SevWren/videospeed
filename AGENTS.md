@@ -90,11 +90,11 @@ Canonical module list + cross-module contracts:
 ## Runbooks (sub-agent roles)
 
 Agent role definitions with pre-conditions live in `.claude/agents/`:
-- `implement.md` — pre-conditions before any `src/` edit
-- `triage.md` — diagnosis starting points
-- `gif-specialist.md` — GIF subsystem invariants
-- `site-handler-specialist.md` — per-site handler pattern
-- `settings-specialist.md` — settings flow
+- `implement.md` — runbooks: add Site Handler, Action, persisted setting, GIF change
+- `triage.md` — diagnosis starting points and label definitions
+- `review.md` — Standards axis + Spec axis pre-merge checklist
+- `doc-gardener.md` — keeping docs in sync with code
+- `release-engineer.md` — release checklist and known blockers (T01, T02)
 
 ---
 

@@ -10,6 +10,10 @@ Video Speed Controller is a Chrome WebExtension (Manifest V3) that lets users co
 
 ## Project Structure & Module Organization
 
+→ Complete module map: docs/ai_generated/REPO_MAP.md (generated; run `npm run map:repo` to refresh)
+→ Protected behaviors (what must not break): docs/ai_generated/protected-behaviors/registry.md
+→ Seam-index (module dependency map): docs/ai_generated/SEAM-INDEX.md
+
 Core extension code lives in `src/`:
 - `src/core/` — playback state, actions, settings, and storage (`video-controller.js`, `action-handler.js`, `settings.js`, `storage-manager.js`); also `gif-frame-engine.js` (frame timing, `effectiveDelay` calculation) and `gif-controller.js` (canvas replacement, rAF loop, memory budget, speed control, overlay)
 - `src/content/` — content script entry point (`injector.js`, `inject.js`)

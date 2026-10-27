@@ -109,25 +109,15 @@ if (!window.VSC.VideoSpeedConfig) {
     }
 
     /**
-     * Apply a live settings patch from the storage relay.
-     * Mutates this.settings in place so all live readers see the update
-     * on their next access without any re-registration or I/O.
-     * Only keys present in the patch are changed; unrelated fields are
-     * untouched (mediaElements, gifElements, speeds, lastSpeed, etc.).
-     * @param {Object} patch - Partial settings object from the relay
+     * Apply a settings patch received from the live relay (synchronous, no I/O)
+     * @param {Object} patch - Partial settings object to merge in
      */
-    applySettings(patch = {}) {
-      if (!patch || typeof patch !== 'object') {
-        return;
-      }
-      try {
-        Object.assign(this.settings, patch);
-        if (patch.logLevel !== undefined) {
-          window.VSC.logger.setVerbosity(this.settings.logLevel);
-        }
-        window.VSC.logger.info('Settings applied live from storage relay');
-      } catch (error) {
-        window.VSC.logger.error(`applySettings failed: ${error.message}`);
+    applySettings(patch) {
+      if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return;
+      if (Object.keys(patch).length === 0) return;
+      Object.assign(this.settings, patch);
+      if (patch.logLevel !== undefined) {
+        window.VSC.logger.setVerbosity(this.settings.logLevel);
       }
     }
 

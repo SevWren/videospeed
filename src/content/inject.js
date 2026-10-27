@@ -664,6 +664,12 @@ extension.initialize().catch((error) => {
 window.VideoSpeedExtension = VideoSpeedExtension;
 window.videoSpeedExtension = extension;
 
+// Relay live settings changes from the Options page into the running extension
+window.addEventListener('VSC_USER_SETTINGS', (event) => {
+  if (!extension?.initialized) return;
+  extension.config.applySettings(event.detail);
+});
+
 // Add test indicator for E2E tests
 const testIndicator = document.createElement('div');
 testIndicator.id = 'vsc-test-indicator';

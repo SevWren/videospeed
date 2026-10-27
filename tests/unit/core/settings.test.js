@@ -164,4 +164,17 @@ runner.test('applySettings mutates this.settings in place (stable reference)', (
   assert.equal(ref.startHidden, true, 'mutation should be visible through original reference');
 });
 
+runner.test('applySettings with an array leaves settings unchanged and does not throw', () => {
+  const config = window.VSC.videoSpeedConfig;
+
+  const speedBefore = config.settings.lastSpeed;
+  const enabledBefore = config.settings.enabled;
+
+  // Array is not a valid settings object — should be a no-op due to Array.isArray guard
+  config.applySettings([1, 2, 3]);
+
+  assert.equal(config.settings.lastSpeed, speedBefore, 'lastSpeed should be unchanged');
+  assert.equal(config.settings.enabled, enabledBefore, 'enabled should be unchanged');
+});
+
 export { runner as settingsTestRunner };

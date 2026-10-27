@@ -286,4 +286,68 @@ runner.test('VSC_USER_SETTINGS does not wipe unrelated runtime state', () => {
   assert.equal(ext.config.settings.lastSpeed, 1.5, 'lastSpeed must not be reset by relay patch');
 });
 
+runner.test(
+  'Seam B: VSC_USER_SETTINGS with modified keyBindings triggers action on matching keydown',
+  async () => {
+    const ext = window.videoSpeedExtension;
+    assert.exists(ext, 'window.videoSpeedExtension should be available');
+
+    if (!ext.initialized) {
+      await ext.initialize();
+    }
+    assert.true(ext.initialized, 'Extension should be initialized');
+
+    // Add a mock video to config so the keydown handler does not bail early
+    const video = document.createElement('video');
+    video.playbackRate = 1.0;
+    ext.config.addMediaElement(video);
+
+    // Use a unique keyCode (999) that does not conflict with any existing binding
+    const uniqueKeyCode = 999;
+    const newBindings = [
+      { action: 'faster', key: uniqueKeyCode, value: 0.5, force: false, predefined: false },
+    ];
+
+    let runActionCalled = false;
+    let runActionArgs = null;
+    const origRunAction = ext.actionHandler.runAction.bind(ext.actionHandler);
+    ext.actionHandler.runAction = (action, value, event) => {
+      runActionCalled = true;
+      runActionArgs = { action, value };
+      return origRunAction(action, value, event);
+    };
+
+    try {
+      // Step 1: relay new bindings in via VSC_USER_SETTINGS
+      window.dispatchEvent(
+        new CustomEvent('VSC_USER_SETTINGS', { detail: { keyBindings: newBindings } })
+      );
+
+      assert.equal(
+        ext.config.settings.keyBindings,
+        newBindings,
+        'keyBindings should be updated after VSC_USER_SETTINGS'
+      );
+
+      // Step 2: fire a synthetic keydown with the unique keyCode
+      const keyEvent = new KeyboardEvent('keydown', {
+        bubbles: true,
+        cancelable: true,
+        keyCode: uniqueKeyCode,
+      });
+      Object.defineProperty(keyEvent, 'keyCode', { value: uniqueKeyCode });
+      document.dispatchEvent(keyEvent);
+
+      // Step 3: assert the action was dispatched
+      assert.true(runActionCalled, 'runAction should be called after keydown with new keyCode');
+      assert.equal(runActionArgs.action, 'faster', 'Action should be "faster"');
+      assert.equal(runActionArgs.value, 0.5, 'Action value should be 0.5');
+    } finally {
+      ext.actionHandler.runAction = origRunAction;
+      ext.config.removeMediaElement(video);
+      ext.config.settings.keyBindings = [...window.VSC.Constants.DEFAULT_SETTINGS.keyBindings];
+    }
+  }
+);
+
 export { runner as injectTestRunner };

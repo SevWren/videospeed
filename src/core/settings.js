@@ -117,7 +117,10 @@ if (!window.VSC.VideoSpeedConfig) {
      * @param {Object} patch - Partial settings object from the relay
      */
     applySettings(patch = {}) {
-      if (!patch || typeof patch !== 'object') {
+      if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
+        return;
+      }
+      if (Object.keys(patch).length === 0) {
         return;
       }
       try {

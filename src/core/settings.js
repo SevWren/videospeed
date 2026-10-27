@@ -113,8 +113,12 @@ if (!window.VSC.VideoSpeedConfig) {
      * @param {Object} patch - Partial settings object to merge in
      */
     applySettings(patch) {
-      if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return;
-      if (Object.keys(patch).length === 0) return;
+      if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
+        return;
+      }
+      if (Object.keys(patch).length === 0) {
+        return;
+      }
       Object.assign(this.settings, patch);
       if (patch.logLevel !== undefined) {
         window.VSC.logger.setVerbosity(this.settings.logLevel);

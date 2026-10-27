@@ -156,12 +156,18 @@ function setupMessageBridge() {
   try {
     chrome.storage.onChanged.addListener((changes, area) => {
       try {
-        if (area !== 'sync') return;
+        if (area !== 'sync') {
+          return;
+        }
         const patch = {};
         for (const [key, { newValue }] of Object.entries(changes)) {
-          if (USER_CONTROLLED_KEYS.has(key)) patch[key] = newValue;
+          if (USER_CONTROLLED_KEYS.has(key)) {
+            patch[key] = newValue;
+          }
         }
-        if (Object.keys(patch).length === 0) return;
+        if (Object.keys(patch).length === 0) {
+          return;
+        }
         window.dispatchEvent(new CustomEvent('VSC_USER_SETTINGS', { detail: patch }));
       } catch (innerError) {
         if (!isExtensionContextInvalidated(innerError)) {

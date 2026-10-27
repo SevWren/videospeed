@@ -598,7 +598,9 @@ window.addEventListener('VSC_MESSAGE', (event) => {
               if (img.gifController && typeof img.gifController.remove === 'function') {
                 img.gifController.remove();
               }
-            } catch (_e) {}
+            } catch (_e) {
+              // Ignore errors during GIF cleanup
+            }
           });
         }
         break;
@@ -666,7 +668,9 @@ window.videoSpeedExtension = extension;
 
 // Relay live settings changes from the Options page into the running extension
 window.addEventListener('VSC_USER_SETTINGS', (event) => {
-  if (!extension?.initialized) return;
+  if (!extension?.initialized) {
+    return;
+  }
   extension.config.applySettings(event.detail);
 });
 

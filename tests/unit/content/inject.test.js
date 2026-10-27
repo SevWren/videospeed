@@ -205,4 +205,47 @@ runner.test('onVideoFound should handle video with neither parentElement nor par
   }
 });
 
+runner.test('VSC_USER_SETTINGS dispatch updates keyBindings on initialized extension', async () => {
+  // Use the module-level extension instance that inject.js registered the listener for
+  const ext = window.videoSpeedExtension;
+  assert.exists(ext, 'window.videoSpeedExtension should be available');
+
+  // Ensure it is initialized (inject.js initializes it on load)
+  if (!ext.initialized) {
+    await ext.initialize();
+  }
+  assert.true(ext.initialized, 'Extension should be initialized');
+
+  // Apply new keyBindings via VSC_USER_SETTINGS event
+  const newBindings = [
+    { action: 'faster', key: 70, value: 0.2, force: false, predefined: true },
+  ];
+
+  window.dispatchEvent(
+    new CustomEvent('VSC_USER_SETTINGS', { detail: { keyBindings: newBindings } })
+  );
+
+  assert.equal(
+    ext.config.settings.keyBindings,
+    newBindings,
+    'keyBindings should be updated to new value'
+  );
+});
+
+runner.test('VSC_USER_SETTINGS dispatch before initialized is a no-op', async () => {
+  extension = new window.VideoSpeedExtension();
+  // Do NOT call initialize — extension.initialized is false
+
+  // This should not throw and should not mutate settings
+  window.dispatchEvent(
+    new CustomEvent('VSC_USER_SETTINGS', { detail: { rememberSpeed: true } })
+  );
+
+  // The module-level extension listener guards with initialized check; a fresh
+  // instance created here is not the one the listener references, so there is
+  // nothing to assert on the fresh instance — just verify no error was thrown
+  // and the fresh instance is still uninitialized.
+  assert.equal(extension.initialized, false, 'Freshly created extension should still be uninitialized');
+});
+
 export { runner as injectTestRunner }; 

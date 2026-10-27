@@ -96,4 +96,45 @@ runner.test('VideoSpeedConfig should handle invalid key binding requests gracefu
   config.setKeyBinding('nonexistent', 123);
 });
 
+runner.test('applySettings merges patch without wiping unrelated fields', async () => {
+  const config = new window.VSC.VideoSpeedConfig();
+  await config.load();
+
+  const originalEnabled = config.settings.enabled;
+  const originalLastSpeed = config.settings.lastSpeed;
+
+  config.applySettings({ rememberSpeed: true });
+
+  assert.equal(config.settings.rememberSpeed, true, 'rememberSpeed should be updated');
+  assert.equal(config.settings.enabled, originalEnabled, 'enabled should be unchanged');
+  assert.equal(config.settings.lastSpeed, originalLastSpeed, 'lastSpeed should be unchanged');
+});
+
+runner.test('applySettings calls logger.setVerbosity when patch includes logLevel', async () => {
+  const config = new window.VSC.VideoSpeedConfig();
+  await config.load();
+
+  let verbositySet = null;
+  const origSetVerbosity = window.VSC.logger.setVerbosity;
+  window.VSC.logger.setVerbosity = (level) => { verbositySet = level; };
+
+  try {
+    config.applySettings({ logLevel: 5 });
+    assert.equal(config.settings.logLevel, 5, 'logLevel should be updated');
+    assert.equal(verbositySet, 5, 'setVerbosity should have been called with new logLevel');
+  } finally {
+    window.VSC.logger.setVerbosity = origSetVerbosity;
+  }
+});
+
+runner.test('applySettings handles null patch without throwing', () => {
+  const config = window.VSC.videoSpeedConfig;
+
+  // Should not throw for null
+  config.applySettings(null);
+
+  // Should not throw for empty object
+  config.applySettings({});
+});
+
 export { runner as settingsTestRunner };

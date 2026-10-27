@@ -12,4 +12,4 @@ The skills speak in terms of five canonical triage roles. This file maps those r
 
 When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the corresponding label string from this table.
 
-Judge every issue against [`SCOPE.md`](../../SCOPE.md) before picking a state. Rejections close as "not planned".
+Judge every issue against the project scope before picking a state. Rejections close as "not planned".

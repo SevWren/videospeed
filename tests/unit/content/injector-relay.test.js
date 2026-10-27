@@ -3,7 +3,11 @@
  * Tests that USER_CONTROLLED_KEYS filtering and area check work correctly
  */
 
-import { installChromeMock, cleanupChromeMock, resetMockStorage } from '../../helpers/chrome-mock.js';
+import {
+  installChromeMock,
+  cleanupChromeMock,
+  resetMockStorage,
+} from '../../helpers/chrome-mock.js';
 import { SimpleTestRunner, assert } from '../../helpers/test-utils.js';
 
 const runner = new SimpleTestRunner();
@@ -45,12 +49,18 @@ function registerRelay() {
   ]);
 
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== 'sync') return;
+    if (area !== 'sync') {
+      return;
+    }
     const patch = {};
     for (const [key, { newValue }] of Object.entries(changes)) {
-      if (USER_CONTROLLED_KEYS.has(key)) patch[key] = newValue;
+      if (USER_CONTROLLED_KEYS.has(key)) {
+        patch[key] = newValue;
+      }
     }
-    if (Object.keys(patch).length === 0) return;
+    if (Object.keys(patch).length === 0) {
+      return;
+    }
     window.dispatchEvent(new CustomEvent('VSC_USER_SETTINGS', { detail: patch }));
   });
 }
@@ -70,10 +80,7 @@ runner.test('storage.onChanged with USER_CONTROLLED_KEY dispatches VSC_USER_SETT
 runner.test('storage.onChanged with lastSpeed does not dispatch VSC_USER_SETTINGS', () => {
   registerRelay();
 
-  chrome.storage.onChanged.triggerStorageChange(
-    { lastSpeed: { newValue: 1.5 } },
-    'sync'
-  );
+  chrome.storage.onChanged.triggerStorageChange({ lastSpeed: { newValue: 1.5 } }, 'sync');
 
   assert.equal(dispatchedEvents.length, 0, 'Should not dispatch for excluded key lastSpeed');
 });
@@ -81,10 +88,7 @@ runner.test('storage.onChanged with lastSpeed does not dispatch VSC_USER_SETTING
 runner.test('storage.onChanged with lastGifSpeed does not dispatch VSC_USER_SETTINGS', () => {
   registerRelay();
 
-  chrome.storage.onChanged.triggerStorageChange(
-    { lastGifSpeed: { newValue: 2.0 } },
-    'sync'
-  );
+  chrome.storage.onChanged.triggerStorageChange({ lastGifSpeed: { newValue: 2.0 } }, 'sync');
 
   assert.equal(dispatchedEvents.length, 0, 'Should not dispatch for excluded key lastGifSpeed');
 });
@@ -104,22 +108,68 @@ runner.test('storage.onChanged with mixed keys only includes USER_CONTROLLED_KEY
   assert.equal(dispatchedEvents.length, 1, 'Should dispatch one event');
   assert.exists(dispatchedEvents[0].keyBindings, 'Patch should include keyBindings');
   assert.exists(dispatchedEvents[0].rememberSpeed, 'Patch should include rememberSpeed');
-  assert.equal(
-    dispatchedEvents[0].lastSpeed,
-    undefined,
-    'Patch must not include lastSpeed'
-  );
+  assert.equal(dispatchedEvents[0].lastSpeed, undefined, 'Patch must not include lastSpeed');
 });
 
 runner.test('storage.onChanged with area "local" does not dispatch VSC_USER_SETTINGS', () => {
   registerRelay();
 
-  chrome.storage.onChanged.triggerStorageChange(
-    { keyBindings: { newValue: [] } },
-    'local'
-  );
+  chrome.storage.onChanged.triggerStorageChange({ keyBindings: { newValue: [] } }, 'local');
 
   assert.equal(dispatchedEvents.length, 0, 'Should not dispatch for non-sync area');
+});
+
+runner.test('storage.onChanged with rememberSpeed triggers relay', () => {
+  registerRelay();
+
+  chrome.storage.onChanged.triggerStorageChange({ rememberSpeed: { newValue: true } }, 'sync');
+
+  assert.equal(dispatchedEvents.length, 1, 'Should dispatch one event for rememberSpeed');
+  assert.equal(
+    dispatchedEvents[0].rememberSpeed,
+    true,
+    'Patch should contain updated rememberSpeed'
+  );
+});
+
+runner.test('storage.onChanged with startHidden triggers relay', () => {
+  registerRelay();
+
+  chrome.storage.onChanged.triggerStorageChange({ startHidden: { newValue: true } }, 'sync');
+
+  assert.equal(dispatchedEvents.length, 1, 'Should dispatch one event for startHidden');
+  assert.equal(dispatchedEvents[0].startHidden, true, 'Patch should contain updated startHidden');
+});
+
+runner.test('storage.onChanged with logLevel triggers relay', () => {
+  registerRelay();
+
+  chrome.storage.onChanged.triggerStorageChange({ logLevel: { newValue: 5 } }, 'sync');
+
+  assert.equal(dispatchedEvents.length, 1, 'Should dispatch one event for logLevel');
+  assert.equal(dispatchedEvents[0].logLevel, 5, 'Patch should contain updated logLevel');
+});
+
+runner.test('storage.onChanged with enabled triggers relay', () => {
+  registerRelay();
+
+  chrome.storage.onChanged.triggerStorageChange({ enabled: { newValue: false } }, 'sync');
+
+  assert.equal(dispatchedEvents.length, 1, 'Should dispatch one event for enabled');
+  assert.equal(dispatchedEvents[0].enabled, false, 'Patch should contain updated enabled value');
+});
+
+runner.test('storage.onChanged with blacklist triggers relay', () => {
+  registerRelay();
+
+  chrome.storage.onChanged.triggerStorageChange({ blacklist: { newValue: 'example.com' } }, 'sync');
+
+  assert.equal(dispatchedEvents.length, 1, 'Should dispatch one event for blacklist');
+  assert.equal(
+    dispatchedEvents[0].blacklist,
+    'example.com',
+    'Patch should contain updated blacklist'
+  );
 });
 
 export { runner as injectorRelayTestRunner };

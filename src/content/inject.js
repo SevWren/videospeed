@@ -102,7 +102,10 @@ class VideoSpeedExtension {
   initializeDocument(document) {
     try {
       // Prevent double initialization
-      if (this._docInitialized) { return; } this._docInitialized = true;
+      if (this._docInitialized) {
+        return;
+      }
+      this._docInitialized = true;
 
       if (document.body) {
         document.body.classList.add('vsc-initialized');
@@ -174,16 +177,18 @@ class VideoSpeedExtension {
         // GIF scan
         let gifImgs = [];
         if (this.config.settings.controlGifs) {
-          gifImgs = this.mediaObserver.scanForGifs
-            ? this.mediaObserver.scanForGifs(document)
-            : [];
+          gifImgs = this.mediaObserver.scanForGifs ? this.mediaObserver.scanForGifs(document) : [];
           let gifIdx = 0;
           const attachNextGif = () => {
             if (gifIdx >= gifImgs.length) {
               return;
             }
             const img = gifImgs[gifIdx++];
-            try { this.onGifFound(img, img.parentElement || img.parentNode); } catch(e) { this.logger.error(`GIF attach error: ${e.message}`); }
+            try {
+              this.onGifFound(img, img.parentElement || img.parentNode);
+            } catch (e) {
+              this.logger.error(`GIF attach error: ${e.message}`);
+            }
             if (window.requestIdleCallback) {
               requestIdleCallback(attachNextGif, { timeout: 500 });
             } else {
@@ -236,15 +241,29 @@ class VideoSpeedExtension {
         });
 
         if (this.config.settings.controlGifs) {
-          const gifImgs = this.mediaObserver.scanForGifs ? this.mediaObserver.scanForGifs(document) : [];
+          const gifImgs = this.mediaObserver.scanForGifs
+            ? this.mediaObserver.scanForGifs(document)
+            : [];
           let gifIdx = 0;
           const attachNextGif = () => {
-            if (gifIdx >= gifImgs.length) return;
+            if (gifIdx >= gifImgs.length) {
+              return;
+            }
             const img = gifImgs[gifIdx++];
-            try { this.onGifFound(img, img.parentElement || img.parentNode); } catch(e) { this.logger.error(`GIF attach error: ${e.message}`); }
-            if (window.requestIdleCallback) { requestIdleCallback(attachNextGif, { timeout: 500 }); } else { setTimeout(attachNextGif, 0); }
+            try {
+              this.onGifFound(img, img.parentElement || img.parentNode);
+            } catch (e) {
+              this.logger.error(`GIF attach error: ${e.message}`);
+            }
+            if (window.requestIdleCallback) {
+              requestIdleCallback(attachNextGif, { timeout: 500 });
+            } else {
+              setTimeout(attachNextGif, 0);
+            }
           };
-          if (gifImgs.length > 0) attachNextGif();
+          if (gifImgs.length > 0) {
+            attachNextGif();
+          }
         }
 
         this.logger.info(
@@ -353,11 +372,19 @@ class VideoSpeedExtension {
    */
   async onGifFound(img, parent) {
     try {
-      if (!this.config.settings.controlGifs) { return; }
-      if (img.vscGifFailed) { return; }
-      if (img.gifController) { return; }
+      if (!this.config.settings.controlGifs) {
+        return;
+      }
+      if (img.vscGifFailed) {
+        return;
+      }
+      if (img.gifController) {
+        return;
+      }
       if (img._vscTeardownSrc !== undefined) {
-        if (img.src === img._vscTeardownSrc) { return; }
+        if (img.src === img._vscTeardownSrc) {
+          return;
+        }
         delete img._vscTeardownSrc;
         delete img.vscGifIgnore;
       } else if (img.vscGifIgnore) {
@@ -365,11 +392,20 @@ class VideoSpeedExtension {
         return;
       }
       const sentinel = { pending: true, _cancelled: false };
-      sentinel.remove = function() { this._cancelled = true; };
+      sentinel.remove = function () {
+        this._cancelled = true;
+      };
       img.gifController = sentinel;
-      const gc = await window.VSC.GifController.create(img, parent, this.config, this.actionHandler);
+      const gc = await window.VSC.GifController.create(
+        img,
+        parent,
+        this.config,
+        this.actionHandler
+      );
       if (sentinel._cancelled) {
-        if (gc) gc.remove();
+        if (gc) {
+          gc.remove();
+        }
         return;
       }
       if (!gc) {
@@ -562,7 +598,9 @@ window.addEventListener('VSC_MESSAGE', (event) => {
               if (img.gifController && typeof img.gifController.remove === 'function') {
                 img.gifController.remove();
               }
-            } catch (_e) {}
+            } catch (_e) {
+              // Ignore errors during GIF cleanup
+            }
           });
         }
         break;
@@ -606,7 +644,9 @@ window.videoSpeedExtension = extension;
 
 // Relay live settings changes from the Options page into the running extension
 window.addEventListener('VSC_USER_SETTINGS', (event) => {
-  if (!extension?.initialized) return;
+  if (!extension?.initialized) {
+    return;
+  }
   extension.config.applySettings(event.detail);
 });
 

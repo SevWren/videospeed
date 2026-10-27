@@ -3,8 +3,12 @@
  * Using global variables to match browser extension architecture
  */
 
-import { installChromeMock, cleanupChromeMock, resetMockStorage } from '../../helpers/chrome-mock.js';
-import { SimpleTestRunner, assert, wait } from '../../helpers/test-utils.js';
+import {
+  installChromeMock,
+  cleanupChromeMock,
+  resetMockStorage,
+} from '../../helpers/chrome-mock.js';
+import { SimpleTestRunner, assert } from '../../helpers/test-utils.js';
 import { loadMinimalModules } from '../../helpers/module-loader.js';
 
 // Load all required modules
@@ -116,7 +120,9 @@ runner.test('applySettings calls logger.setVerbosity when patch includes logLeve
 
   let verbositySet = null;
   const origSetVerbosity = window.VSC.logger.setVerbosity;
-  window.VSC.logger.setVerbosity = (level) => { verbositySet = level; };
+  window.VSC.logger.setVerbosity = (level) => {
+    verbositySet = level;
+  };
 
   try {
     config.applySettings({ logLevel: 5 });
@@ -135,6 +141,19 @@ runner.test('applySettings handles null patch without throwing', () => {
 
   // Should not throw for empty object
   config.applySettings({});
+});
+
+runner.test('applySettings with an array leaves settings unchanged and does not throw', () => {
+  const config = window.VSC.videoSpeedConfig;
+
+  const speedBefore = config.settings.lastSpeed;
+  const enabledBefore = config.settings.enabled;
+
+  // Array is not a valid settings object — should be a no-op
+  config.applySettings([1, 2, 3]);
+
+  assert.equal(config.settings.lastSpeed, speedBefore, 'lastSpeed should be unchanged');
+  assert.equal(config.settings.enabled, enabledBefore, 'enabled should be unchanged');
 });
 
 export { runner as settingsTestRunner };

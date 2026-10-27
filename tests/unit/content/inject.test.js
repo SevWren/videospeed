@@ -3,8 +3,17 @@
  * Testing the fix for video elements without parentElement
  */
 
-import { installChromeMock, cleanupChromeMock, resetMockStorage } from '../../helpers/chrome-mock.js';
-import { SimpleTestRunner, assert, createMockVideo, createMockDOM } from '../../helpers/test-utils.js';
+import {
+  installChromeMock,
+  cleanupChromeMock,
+  resetMockStorage,
+} from '../../helpers/chrome-mock.js';
+import {
+  SimpleTestRunner,
+  assert,
+  createMockVideo,
+  createMockDOM,
+} from '../../helpers/test-utils.js';
 import { loadInjectModules } from '../../helpers/module-loader.js';
 
 // Load all required modules
@@ -36,7 +45,7 @@ runner.afterEach(() => {
 
   // Clean up any remaining video elements
   const videos = document.querySelectorAll('video');
-  videos.forEach(video => {
+  videos.forEach((video) => {
     if (video.vsc) {
       try {
         video.vsc.remove();
@@ -66,20 +75,20 @@ function createVideoWithoutParentElement() {
   Object.defineProperty(video, 'parentElement', {
     value: null,
     writable: false,
-    configurable: true
+    configurable: true,
   });
 
   Object.defineProperty(video, 'parentNode', {
     value: parentNode,
     writable: false,
-    configurable: true
+    configurable: true,
   });
 
   // Mock isConnected property for validity check
   Object.defineProperty(video, 'isConnected', {
     value: true,
     writable: false,
-    configurable: true
+    configurable: true,
   });
 
   return { video, parentNode };
@@ -100,11 +109,17 @@ runner.test('onVideoFound should handle video elements without parentElement', a
 
     // Verify that the video controller was attached
     assert.exists(video.vsc, 'Video controller should be attached to the video element');
-    assert.true(video.vsc instanceof window.VSC.VideoController, 'Should create VideoController instance');
+    assert.true(
+      video.vsc instanceof window.VSC.VideoController,
+      'Should create VideoController instance'
+    );
 
     // Verify that the controller was initialized with the correct parent (parentNode fallback)
-    assert.equal(video.vsc.parent, parentNode, 'VideoController should use parentNode when parentElement is null');
-
+    assert.equal(
+      video.vsc.parent,
+      parentNode,
+      'VideoController should use parentNode when parentElement is null'
+    );
   } catch (error) {
     console.error('Test error:', error);
     assert.true(false, `Test should not throw error: ${error.message}`);
@@ -126,20 +141,20 @@ runner.test('onVideoFound should prefer parentElement when available', async () 
     Object.defineProperty(video, 'parentElement', {
       value: parentElement,
       writable: false,
-      configurable: true
+      configurable: true,
     });
 
     Object.defineProperty(video, 'parentNode', {
       value: parentNode,
       writable: false,
-      configurable: true
+      configurable: true,
     });
 
     // Mock isConnected property for validity check
     Object.defineProperty(video, 'isConnected', {
       value: true,
       writable: false,
-      configurable: true
+      configurable: true,
     });
 
     // Test onVideoFound with parentElement available
@@ -150,60 +165,75 @@ runner.test('onVideoFound should prefer parentElement when available', async () 
 
     // Verify that the controller was initialized with video.parentElement (not the passed parent)
     // VideoController constructor uses target.parentElement || parent
-    assert.equal(video.vsc.parent, parentElement, 'VideoController should prefer video.parentElement when available');
-
+    assert.equal(
+      video.vsc.parent,
+      parentElement,
+      'VideoController should prefer video.parentElement when available'
+    );
   } catch (error) {
     assert.true(false, `Test should not throw error: ${error.message}`);
   }
 });
 
-runner.test('onVideoFound should handle video with neither parentElement nor parentNode', async () => {
-  // Verify VideoSpeedExtension is available
-  assert.exists(window.VideoSpeedExtension, 'VideoSpeedExtension class should be available on window');
-  
-  // Create extension instance
-  extension = new window.VideoSpeedExtension();
-  
-  // Verify extension was created
-  assert.exists(extension, 'Extension instance should be created');
+runner.test(
+  'onVideoFound should handle video with neither parentElement nor parentNode',
+  async () => {
+    // Verify VideoSpeedExtension is available
+    assert.exists(
+      window.VideoSpeedExtension,
+      'VideoSpeedExtension class should be available on window'
+    );
 
-  try {
-    await extension.initialize();
+    // Create extension instance
+    extension = new window.VideoSpeedExtension();
 
-    // Create a video element with no parent references
-    const video = createMockVideo();
-    const fallbackParent = document.createElement('div');
+    // Verify extension was created
+    assert.exists(extension, 'Extension instance should be created');
 
-    Object.defineProperty(video, 'parentElement', {
-      value: null,
-      writable: false,
-      configurable: true
-    });
+    try {
+      await extension.initialize();
 
-    Object.defineProperty(video, 'parentNode', {
-      value: null,
-      writable: false,
-      configurable: true
-    });
+      // Create a video element with no parent references
+      const video = createMockVideo();
+      const fallbackParent = document.createElement('div');
 
-    // Mock isConnected property for validity check
-    Object.defineProperty(video, 'isConnected', {
-      value: true,
-      writable: false,
-      configurable: true
-    });
+      Object.defineProperty(video, 'parentElement', {
+        value: null,
+        writable: false,
+        configurable: true,
+      });
 
-    // This should not throw an error even with no parent references
-    extension.onVideoFound(video, fallbackParent);
+      Object.defineProperty(video, 'parentNode', {
+        value: null,
+        writable: false,
+        configurable: true,
+      });
 
-    // Verify basic functionality
-    assert.exists(video.vsc, 'Video controller should be attached even without parent references');
-    assert.equal(video.vsc.parent, fallbackParent, 'VideoController should use provided fallback parent');
+      // Mock isConnected property for validity check
+      Object.defineProperty(video, 'isConnected', {
+        value: true,
+        writable: false,
+        configurable: true,
+      });
 
-  } catch (error) {
-    assert.true(false, `Test should not throw error: ${error.message}`);
+      // This should not throw an error even with no parent references
+      extension.onVideoFound(video, fallbackParent);
+
+      // Verify basic functionality
+      assert.exists(
+        video.vsc,
+        'Video controller should be attached even without parent references'
+      );
+      assert.equal(
+        video.vsc.parent,
+        fallbackParent,
+        'VideoController should use provided fallback parent'
+      );
+    } catch (error) {
+      assert.true(false, `Test should not throw error: ${error.message}`);
+    }
   }
-});
+);
 
 runner.test('VSC_USER_SETTINGS dispatch updates keyBindings on initialized extension', async () => {
   // Use the module-level extension instance that inject.js registered the listener for
@@ -217,9 +247,7 @@ runner.test('VSC_USER_SETTINGS dispatch updates keyBindings on initialized exten
   assert.true(ext.initialized, 'Extension should be initialized');
 
   // Apply new keyBindings via VSC_USER_SETTINGS event
-  const newBindings = [
-    { action: 'faster', key: 70, value: 0.2, force: false, predefined: true },
-  ];
+  const newBindings = [{ action: 'faster', key: 70, value: 0.2, force: false, predefined: true }];
 
   window.dispatchEvent(
     new CustomEvent('VSC_USER_SETTINGS', { detail: { keyBindings: newBindings } })
@@ -237,15 +265,125 @@ runner.test('VSC_USER_SETTINGS dispatch before initialized is a no-op', async ()
   // Do NOT call initialize — extension.initialized is false
 
   // This should not throw and should not mutate settings
-  window.dispatchEvent(
-    new CustomEvent('VSC_USER_SETTINGS', { detail: { rememberSpeed: true } })
-  );
+  window.dispatchEvent(new CustomEvent('VSC_USER_SETTINGS', { detail: { rememberSpeed: true } }));
 
   // The module-level extension listener guards with initialized check; a fresh
   // instance created here is not the one the listener references, so there is
   // nothing to assert on the fresh instance — just verify no error was thrown
   // and the fresh instance is still uninitialized.
-  assert.equal(extension.initialized, false, 'Freshly created extension should still be uninitialized');
+  assert.equal(
+    extension.initialized,
+    false,
+    'Freshly created extension should still be uninitialized'
+  );
 });
 
-export { runner as injectTestRunner }; 
+runner.test(
+  'VSC_USER_SETTINGS dispatch before initialized is a no-op (explicit guard)',
+  async () => {
+    // Use the module-level extension and confirm the guard works when we
+    // temporarily mark it uninitialized, then restore it.
+    const ext = window.videoSpeedExtension;
+    assert.exists(ext, 'window.videoSpeedExtension should be available');
+
+    // Ensure it was initialized by the module load
+    if (!ext.initialized) {
+      await ext.initialize();
+    }
+
+    const prevRememberSpeed = ext.config.settings.rememberSpeed;
+
+    // Temporarily mark as uninitialized
+    ext.initialized = false;
+
+    window.dispatchEvent(
+      new CustomEvent('VSC_USER_SETTINGS', { detail: { rememberSpeed: !prevRememberSpeed } })
+    );
+
+    // Settings must NOT have changed because initialized was false
+    assert.equal(
+      ext.config.settings.rememberSpeed,
+      prevRememberSpeed,
+      'Settings must not change when extension is not initialized'
+    );
+
+    // Restore so we don't break subsequent tests
+    ext.initialized = true;
+  }
+);
+
+runner.test(
+  'Seam B: VSC_USER_SETTINGS with modified keyBindings triggers action on matching keydown',
+  async () => {
+    // Use the module-level extension instance (inject.js listener is bound to it)
+    const ext = window.videoSpeedExtension;
+    assert.exists(ext, 'window.videoSpeedExtension should be available');
+
+    if (!ext.initialized) {
+      await ext.initialize();
+    }
+    assert.true(ext.initialized, 'Extension should be initialized');
+
+    // Add a mock video to config so the keydown handler does not bail early
+    const video = document.createElement('video');
+    video.playbackRate = 1.0;
+    ext.config.addMediaElement(video);
+
+    // Use a unique keyCode (999) that does not conflict with any existing binding
+    const uniqueKeyCode = 999;
+    const newBindings = [
+      { action: 'faster', key: uniqueKeyCode, value: 0.5, force: false, predefined: false },
+    ];
+
+    // Spy on runAction before dispatching so we can detect calls
+    let runActionCalled = false;
+    let runActionArgs = null;
+    const origRunAction = ext.actionHandler.runAction.bind(ext.actionHandler);
+    ext.actionHandler.runAction = (action, value, event) => {
+      runActionCalled = true;
+      runActionArgs = { action, value };
+      return origRunAction(action, value, event);
+    };
+
+    try {
+      // Step 1: Dispatch VSC_USER_SETTINGS with the modified keyBindings
+      window.dispatchEvent(
+        new CustomEvent('VSC_USER_SETTINGS', { detail: { keyBindings: newBindings } })
+      );
+
+      // Verify the settings were applied
+      assert.equal(
+        ext.config.settings.keyBindings,
+        newBindings,
+        'keyBindings should be updated after VSC_USER_SETTINGS'
+      );
+
+      // Step 2: Fire a synthetic keydown event with the unique keyCode on document
+      const keyEvent = new KeyboardEvent('keydown', {
+        bubbles: true,
+        cancelable: true,
+        keyCode: uniqueKeyCode,
+      });
+      Object.defineProperty(keyEvent, 'keyCode', { value: uniqueKeyCode });
+
+      document.dispatchEvent(keyEvent);
+
+      // Step 3: Assert the action was dispatched with correct args
+      assert.true(
+        runActionCalled,
+        'runAction should have been called after keydown with new keyCode'
+      );
+      assert.equal(runActionArgs.action, 'faster', 'Action should be "faster"');
+      assert.equal(runActionArgs.value, 0.5, 'Action value should be 0.5');
+    } finally {
+      // Restore original runAction
+      ext.actionHandler.runAction = origRunAction;
+      // Remove mock video element
+      ext.config.removeMediaElement(video);
+      // Restore default keyBindings so subsequent tests are not affected
+      ext.config.settings.keyBindings = [...window.VSC.Constants.DEFAULT_SETTINGS.keyBindings];
+    }
+  }
+);
+
+export { runner as injectTestRunner };

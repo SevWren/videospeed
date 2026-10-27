@@ -49,8 +49,15 @@ export const chromeMock = {
       },
     },
     onChanged: {
-      addListener: (_callback) => {
-        // Mock storage change listener
+      _listeners: [],
+      addListener(callback) {
+        if (typeof callback === 'function') {
+          this._listeners.push(callback);
+        }
+      },
+      /** Test helper: synchronously invoke all registered listeners. */
+      triggerStorageChange(changes, areaName = 'sync') {
+        this._listeners.forEach((fn) => fn(changes, areaName));
       },
     },
   },
@@ -102,6 +109,8 @@ export function cleanupChromeMock() {
  * Reset mock storage to defaults
  */
 export function resetMockStorage() {
+  // Clear any registered onChanged listeners so tests don't leak into each other
+  chromeMock.storage.onChanged._listeners = [];
   Object.keys(mockStorage).forEach((key) => delete mockStorage[key]);
   Object.assign(mockStorage, {
     enabled: true,

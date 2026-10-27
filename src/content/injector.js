@@ -267,6 +267,44 @@ function setupMessageBridge() {
       }
     }
   });
+
+  // ── Live settings relay (issue #10) ──────────────────────────────────────
+  // When the Options page (or popup) saves to chrome.storage.sync, push the
+  // changed user-controlled keys into the page world via VSC_USER_SETTINGS so
+  // that already-open tabs pick them up without a reload.
+  //
+  // Keys omitted from this set are intentionally NOT relayed:
+  //   lastSpeed, lastGifSpeed, speeds — runtime state; changes are high-freq
+  //   controlGifs   — handled by the dedicated VSC_ENABLE/DISABLE_GIF_CONTROL
+  //                   message channel that performs full GIF controller teardown
+  //   displayKeyCode — legacy; the display key lives inside keyBindings already
+  //
+  // The relay reads values directly from the `changes` argument — no
+  // chrome.storage.sync.get(null) re-fetch — so there is exactly one IPC call
+  // per onChanged invocation regardless of how many frames are on the page.
+  const _VSC_USER_CONTROLLED_KEYS = new Set([
+    'keyBindings', 'rememberSpeed', 'forceLastSavedSpeed', 'audioBoolean',
+    'startHidden', 'controllerOpacity', 'controllerButtonSize', 'logLevel',
+    'blacklist', 'enabled', 'gifSpeedStep',
+  ]);
+
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    try {
+      if (areaName !== 'sync') return;
+      const patch = {};
+      for (const key of _VSC_USER_CONTROLLED_KEYS) {
+        if (Object.prototype.hasOwnProperty.call(changes, key)) {
+          patch[key] = changes[key].newValue;
+        }
+      }
+      if (Object.keys(patch).length === 0) return;
+      window.dispatchEvent(new CustomEvent('VSC_USER_SETTINGS', { detail: patch }));
+    } catch (error) {
+      if (!isExtensionContextInvalidated(error)) {
+        console.warn('VSC live settings relay error:', error);
+      }
+    }
+  });
 }
 
 // Fetch user settings from Chrome storage and inject into page context

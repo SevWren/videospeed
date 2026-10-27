@@ -589,6 +589,26 @@ window.addEventListener('VSC_MESSAGE', (event) => {
 // Create and initialize extension instance
 const extension = new VideoSpeedExtension();
 
+// Live settings relay receiver (issue #10).
+// The content script dispatches VSC_USER_SETTINGS on window whenever
+// user-controlled keys change in chrome.storage.sync.  Apply the patch
+// to the live config so the next keydown, rate-change, or GIF action
+// uses the updated values without a page reload.
+//
+// Guard: skip the initial VSC_USER_SETTINGS dispatch that fires during
+// startup (before extension.initialize() completes), which is handled
+// by StorageManager.waitForInjectedSettings() and VideoSpeedConfig.load().
+window.addEventListener('VSC_USER_SETTINGS', (event) => {
+  if (!extension.initialized) return;
+  const patch = event.detail;
+  if (!patch || typeof patch !== 'object') return;
+  try {
+    extension.config.applySettings(patch);
+  } catch (error) {
+    window.VSC?.logger?.error(`Live settings relay apply failed: ${error.message}`);
+  }
+});
+
 // Handle page unload
 window.addEventListener('beforeunload', () => {
   extension.cleanup();

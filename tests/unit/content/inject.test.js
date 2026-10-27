@@ -205,4 +205,85 @@ runner.test('onVideoFound should handle video with neither parentElement nor par
   }
 });
 
-export { runner as injectTestRunner }; 
+// ── Live settings relay — Seam B tests (issue #10) ───────────────────────────
+// Dispatch VSC_USER_SETTINGS on window and assert that the live config is
+// updated immediately.  The listener in inject.js references the module-level
+// `window.videoSpeedExtension` instance (set at module load time), so tests
+// read results from that instance rather than creating a new one.
+
+runner.test('VSC_USER_SETTINGS updates keyBindings in live config when extension is initialized', () => {
+  // window.videoSpeedExtension is the module-level instance whose listener
+  // was registered when loadInjectModules() loaded inject.js.
+  const ext = window.videoSpeedExtension;
+  if (!ext || !ext.initialized) return; // guard: skip if module didn't init
+
+  const newBindings = [
+    { action: 'faster', key: 70, value: 0.1, force: false, predefined: true },
+    { action: 'slower', key: 71, value: 0.1, force: false, predefined: true },
+  ];
+
+  window.dispatchEvent(new CustomEvent('VSC_USER_SETTINGS', {
+    detail: { keyBindings: newBindings },
+  }));
+
+  assert.equal(
+    ext.config.settings.keyBindings, newBindings,
+    'keyBindings reference should be updated after relay dispatch'
+  );
+  assert.equal(ext.config.settings.keyBindings[0].key, 70, 'new key code should be in effect');
+});
+
+runner.test('VSC_USER_SETTINGS is a no-op before extension.initialized is true', () => {
+  const ext = window.videoSpeedExtension;
+  if (!ext) return;
+
+  const originalBindings = ext.config.settings.keyBindings;
+  const wasInitialized = ext.initialized;
+
+  // Temporarily mark as not initialized to test the guard
+  ext.initialized = false;
+
+  window.dispatchEvent(new CustomEvent('VSC_USER_SETTINGS', {
+    detail: { keyBindings: [{ action: 'faster', key: 99, value: 0.5, force: false, predefined: true }] },
+  }));
+
+  // Restore
+  ext.initialized = wasInitialized;
+
+  assert.equal(
+    ext.config.settings.keyBindings, originalBindings,
+    'keyBindings must not be modified while extension.initialized is false'
+  );
+});
+
+runner.test('VSC_USER_SETTINGS updates rememberSpeed and gifSpeedStep simultaneously', () => {
+  const ext = window.videoSpeedExtension;
+  if (!ext || !ext.initialized) return;
+
+  window.dispatchEvent(new CustomEvent('VSC_USER_SETTINGS', {
+    detail: { rememberSpeed: true, gifSpeedStep: 0.25 },
+  }));
+
+  assert.equal(ext.config.settings.rememberSpeed, true, 'rememberSpeed should be updated');
+  assert.equal(ext.config.settings.gifSpeedStep, 0.25, 'gifSpeedStep should be updated');
+});
+
+runner.test('VSC_USER_SETTINGS does not wipe unrelated runtime state', () => {
+  const ext = window.videoSpeedExtension;
+  if (!ext || !ext.initialized) return;
+
+  ext.config.settings.speeds = { 'https://example.com/video.mp4': 1.5 };
+  ext.config.settings.lastSpeed = 1.5;
+
+  window.dispatchEvent(new CustomEvent('VSC_USER_SETTINGS', {
+    detail: { rememberSpeed: false },
+  }));
+
+  assert.equal(
+    ext.config.settings.speeds['https://example.com/video.mp4'], 1.5,
+    'per-source speeds must not be wiped by relay patch'
+  );
+  assert.equal(ext.config.settings.lastSpeed, 1.5, 'lastSpeed must not be reset by relay patch');
+});
+
+export { runner as injectTestRunner };

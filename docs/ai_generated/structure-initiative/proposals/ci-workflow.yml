@@ -1,0 +1,63 @@
+# Proposed GitHub Actions CI workflow
+# Status: PROPOSAL — not enabled by this program
+# Enable by moving to .github/workflows/ci.yml
+# Requires: .github/ directory, human approval
+
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint (check-only, no --fix)
+        run: npm run check:lint
+
+      - name: Format check (check-only, no --write)
+        run: npm run check:format
+
+      - name: Run tests
+        run: npm test
+
+      - name: Check structure integrity
+        run: node scripts/check-structure.mjs
+
+      - name: Check seam cards
+        run: node scripts/check-seams.mjs
+
+      - name: Check doc citations
+        run: node scripts/check-docs.mjs && node scripts/verify-citations.mjs
+
+      - name: Verify zero-diff on protected surface
+        run: |
+          DIFF=$(git diff --name-status origin/master...HEAD -- src manifest.json LICENSE PRIVACY.md)
+          if [ -n "$DIFF" ]; then
+            echo "ERROR: Protected surface modified:"
+            echo "$DIFF"
+            exit 1
+          fi
+          echo "Protected surface: unchanged"
+
+# Notes:
+# - npm run build is NOT used here (it mutates files with lint:fix + format before testing)
+# - npm run check:lint and npm run check:format are the non-mutating equivalents
+# - zip step omitted: 'zip' binary not available on ubuntu-latest by default;
+#   add 'apt-get install -y zip' step if packaging in CI is desired
+# - Requires package-lock.json for npm ci to work (present at base SHA)

@@ -140,7 +140,7 @@ class ActionHandler {
         this._saveGifSpeedDebounced(1.0);
         break;
       case 'fast': {
-        const fastSpeed = (typeof value === 'number' && value > 0.1) ? value : 1.0;
+        const fastSpeed = typeof value === 'number' && value > 0.1 ? value : 1.0;
         gc.setSpeed(fastSpeed);
         this._saveGifSpeedDebounced(fastSpeed);
         break;
@@ -178,7 +178,9 @@ class ActionHandler {
 
   _saveGifSpeedDebounced(speed) {
     this._gifSpeedPendingSpeed = speed;
-    if (this._gifSpeedSaveTimer) { clearTimeout(this._gifSpeedSaveTimer); }
+    if (this._gifSpeedSaveTimer) {
+      clearTimeout(this._gifSpeedSaveTimer);
+    }
     this._gifSpeedSaveTimer = setTimeout(() => {
       this.config.settings.lastGifSpeed = speed;
       this.config.save({ lastGifSpeed: speed });
@@ -387,7 +389,9 @@ class ActionHandler {
         const speeds = this.config.settings.speeds;
         if (!(videoSrc in speeds)) {
           const keys = Object.keys(speeds);
-          if (keys.length >= 50) { delete speeds[keys[0]]; }
+          if (keys.length >= 50) {
+            delete speeds[keys[0]];
+          }
         }
         speeds[videoSrc] = numericSpeed;
         window.VSC.logger.debug(`Stored speed ${numericSpeed} for video: ${videoSrc}`);

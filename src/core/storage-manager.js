@@ -68,7 +68,9 @@ if (!window.VSC.StorageManager) {
 
       return new Promise((resolve) => {
         const deadline = setTimeout(() => {
-          window.VSC.logger.warn('waitForInjectedSettings: timed out after 5000ms, resolving with defaults');
+          window.VSC.logger.warn(
+            'waitForInjectedSettings: timed out after 5000ms, resolving with defaults'
+          );
           resolve({ ...defaults });
         }, 5000);
 

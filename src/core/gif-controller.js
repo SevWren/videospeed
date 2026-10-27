@@ -78,8 +78,12 @@ if (!window.VSC.GifController) {
             // "null" as a cache key would cause one failed local GIF to blacklist
             // every local file for the whole session.  Leave origin=null so the
             // failure cache is simply not consulted for local files.
-            origin = (rawOrigin === 'null') ? null : rawOrigin;
-            if (origin && window.VSC.gifFetchFailCache && window.VSC.gifFetchFailCache.has(origin)) {
+            origin = rawOrigin === 'null' ? null : rawOrigin;
+            if (
+              origin &&
+              window.VSC.gifFetchFailCache &&
+              window.VSC.gifFetchFailCache.has(origin)
+            ) {
               const entry = window.VSC.gifFetchFailCache.get(origin);
               if (entry && (entry.permanent || (entry.until && Date.now() < entry.until))) {
                 return null;
@@ -117,7 +121,7 @@ if (!window.VSC.GifController) {
         // loopCount = 0 means infinite (Netscape extension convention).
         // When the Netscape extension is absent gifuct returns undefined/null;
         // default to 0 (infinite) to match what every browser does.
-        gc._loopCount = (parsed.loopCount == null) ? 0 : parsed.loopCount;
+        gc._loopCount = parsed.loopCount == null ? 0 : parsed.loopCount;
 
         // E-2: Reject GIFs smaller than GIF_MIN_SIZE_PX in either dimension before
         // allocating memory.  1×1 tracking-pixel GIFs (e.g. cleardot.gif) are
@@ -135,17 +139,16 @@ if (!window.VSC.GifController) {
         // "show the background", so starting with the right background avoids
         // those areas appearing as transparent-black.
         const bgIdx = parsed.lsd?.backgroundColorIndex;
-        gc._bgColor =
-          (bgIdx != null && parsed.gct && parsed.gct[bgIdx])
-            ? parsed.gct[bgIdx]
-            : null;
+        gc._bgColor = bgIdx != null && parsed.gct && parsed.gct[bgIdx] ? parsed.gct[bgIdx] : null;
 
         // Check per-GIF size limit before allocating (need frame count estimate from parsed)
         // We use parsed.frames.length if available, else defer to after decompressFrames
         const parsedFrameCount = (parsed.frames && parsed.frames.length) || 1;
         const frameBytes = gc._gifWidth * gc._gifHeight * 4 * parsedFrameCount;
         if (frameBytes > window.VSC.Constants.GIF_FRAME_CACHE_LIMIT_BYTES) {
-          window.VSC.logger.info(`GIF too large to cache (${Math.round(frameBytes / 1024 / 1024)}MB) for ${src}`);
+          window.VSC.logger.info(
+            `GIF too large to cache (${Math.round(frameBytes / 1024 / 1024)}MB) for ${src}`
+          );
           return null;
         }
         // Check global memory budget atomically
@@ -233,7 +236,11 @@ if (!window.VSC.GifController) {
         gc._canvas = canvas;
         gc._visibleCtx = canvas.getContext('2d');
         if (!gc._visibleCtx) {
-          if (gc._allocatedBytes > 0) { const b = gc._allocatedBytes; gc._allocatedBytes = 0; window.VSC.GifFrameCache?.releaseAllocation(b); }
+          if (gc._allocatedBytes > 0) {
+            const b = gc._allocatedBytes;
+            gc._allocatedBytes = 0;
+            window.VSC.GifFrameCache?.releaseAllocation(b);
+          }
           return null;
         } // Canvas 2D not available (CSP restriction)
 
@@ -244,7 +251,11 @@ if (!window.VSC.GifController) {
         gc._compositeCanvas = compCanvas;
         gc._compositeCtx = compCanvas.getContext('2d');
         if (!gc._compositeCtx) {
-          if (gc._allocatedBytes > 0) { const b = gc._allocatedBytes; gc._allocatedBytes = 0; window.VSC.GifFrameCache?.releaseAllocation(b); }
+          if (gc._allocatedBytes > 0) {
+            const b = gc._allocatedBytes;
+            gc._allocatedBytes = 0;
+            window.VSC.GifFrameCache?.releaseAllocation(b);
+          }
           return null;
         } // Canvas 2D not available (CSP restriction)
 
@@ -297,11 +308,16 @@ if (!window.VSC.GifController) {
 
         if (!gc.div) {
           if (gc._allocatedBytes > 0) {
-            const b = gc._allocatedBytes; gc._allocatedBytes = 0;
+            const b = gc._allocatedBytes;
+            gc._allocatedBytes = 0;
             window.VSC.GifFrameCache?.releaseAllocation(b);
           }
-          if (gc._canvas && gc._canvas.parentNode) gc._canvas.parentNode.removeChild(gc._canvas);
-          if (gc._positionWrapper && gc._positionWrapper.parentNode) gc._positionWrapper.parentNode.removeChild(gc._positionWrapper);
+          if (gc._canvas && gc._canvas.parentNode) {
+            gc._canvas.parentNode.removeChild(gc._canvas);
+          }
+          if (gc._positionWrapper && gc._positionWrapper.parentNode) {
+            gc._positionWrapper.parentNode.removeChild(gc._positionWrapper);
+          }
           return null;
         }
 
@@ -345,10 +361,11 @@ if (!window.VSC.GifController) {
         window.VSC.logger.error(`GifController.create failed: ${error.message}`);
         try {
           if (typeof gc !== 'undefined' && gc._allocatedBytes > 0) {
-            const b = gc._allocatedBytes; gc._allocatedBytes = 0;
+            const b = gc._allocatedBytes;
+            gc._allocatedBytes = 0;
             window.VSC.GifFrameCache?.releaseAllocation(b);
           }
-        } catch(_) {}
+        } catch (_) {}
         return null;
       }
     }
@@ -467,8 +484,10 @@ if (!window.VSC.GifController) {
             const { r, g, b } = this._bgColor;
             this._compositeCtx.fillStyle = `rgb(${r},${g},${b})`;
             this._compositeCtx.fillRect(
-              prev.dims.left, prev.dims.top,
-              prev.dims.width, prev.dims.height
+              prev.dims.left,
+              prev.dims.top,
+              prev.dims.width,
+              prev.dims.height
             );
           } else {
             this._compositeCtx.clearRect(
@@ -527,8 +546,13 @@ if (!window.VSC.GifController) {
 
     _tick(timestamp) {
       this._rafId = null;
-      if (!this._visibleCtx || !this._compositeCtx) { return; }
-      if (!Number.isFinite(timestamp)) { this._rafId = requestAnimationFrame((ts) => this._tick(ts)); return; }
+      if (!this._visibleCtx || !this._compositeCtx) {
+        return;
+      }
+      if (!Number.isFinite(timestamp)) {
+        this._rafId = requestAnimationFrame((ts) => this._tick(ts));
+        return;
+      }
       if (this._userPaused || this._visibilityPaused) {
         return;
       }
@@ -562,7 +586,9 @@ if (!window.VSC.GifController) {
     }
 
     _startRafLoop() {
-      if (this._rafRunning) return;
+      if (this._rafRunning) {
+        return;
+      }
       this._rafRunning = true;
       this._lastFrameTime = performance.now();
       this._rafId = requestAnimationFrame((ts) => this._tick(ts));
@@ -636,7 +662,10 @@ if (!window.VSC.GifController) {
             window.VSC.Constants.SPEED_LIMITS.MAX
           );
           this.setSpeed(newSpeed);
-          if (this._actionHandler && typeof this._actionHandler._saveGifSpeedDebounced === 'function') {
+          if (
+            this._actionHandler &&
+            typeof this._actionHandler._saveGifSpeedDebounced === 'function'
+          ) {
             this._actionHandler._saveGifSpeedDebounced(newSpeed);
           }
         });
@@ -687,8 +716,10 @@ if (!window.VSC.GifController) {
                           this._allocatedBytes = bytes;
                           this._frames = frames;
                           this._parsed = parsed;
-                          this._frameIdx = 0; this._framesDrawn = 0;
-                          this._savedPixels = null; this._savedRegion = null;
+                          this._frameIdx = 0;
+                          this._framesDrawn = 0;
+                          this._savedPixels = null;
+                          this._savedRegion = null;
                           if (this._compositeCtx) {
                             this._compositeCtx.clearRect(0, 0, this._gifWidth, this._gifHeight);
                             if (this._bgColor) {
@@ -779,7 +810,9 @@ if (!window.VSC.GifController) {
           window.VSC.GifFrameCache?.releaseAllocation(bytesToRelease);
         }
         // 7. Set ignore flag BEFORE re-inserting img
-        if (!this._img._vscTeardownSrc) { this._img._vscTeardownSrc = this._img.src || ''; }
+        if (!this._img._vscTeardownSrc) {
+          this._img._vscTeardownSrc = this._img.src || '';
+        }
         this._img.vscGifIgnore = true;
         // 8. Re-insert original img / undo picture hiding
         if (this._inPicture) {
@@ -789,13 +822,22 @@ if (!window.VSC.GifController) {
           }
         } else if (this._positionWrapper) {
           const wrapperParent = this._positionWrapper.parentNode;
-          if (wrapperParent) wrapperParent.insertBefore(this._img, this._positionWrapper);
-          if (this._canvas && this._canvas.parentNode) this._canvas.parentNode.removeChild(this._canvas);
-          if (this._positionWrapper.parentNode) this._positionWrapper.parentNode.removeChild(this._positionWrapper);
+          if (wrapperParent) {
+            wrapperParent.insertBefore(this._img, this._positionWrapper);
+          }
+          if (this._canvas && this._canvas.parentNode) {
+            this._canvas.parentNode.removeChild(this._canvas);
+          }
+          if (this._positionWrapper.parentNode) {
+            this._positionWrapper.parentNode.removeChild(this._positionWrapper);
+          }
           this._positionWrapper = null;
         } else if (this._canvas) {
           const canvasParent = this._canvas.parentNode;
-          if (canvasParent) { canvasParent.insertBefore(this._img, this._canvas); canvasParent.removeChild(this._canvas); }
+          if (canvasParent) {
+            canvasParent.insertBefore(this._img, this._canvas);
+            canvasParent.removeChild(this._canvas);
+          }
         }
         // 10. Remove controller div
         if (this.div && this.div.parentNode) {

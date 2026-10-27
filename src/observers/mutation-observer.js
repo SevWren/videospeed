@@ -100,23 +100,28 @@ class VideoMutationObserver {
    */
   processAttributeMutation(mutation) {
     // Handle src changes on IMG elements — catches lazy-loaded GIFs
-      if (mutation.attributeName === 'src' && mutation.target.nodeName === 'IMG') {
-        const node = mutation.target;
-        const srcChangedSinceTeardown =
-          node._vscTeardownSrc !== undefined && node.src !== node._vscTeardownSrc;
-        const suppressedByIgnore = node.vscGifIgnore && !srcChangedSinceTeardown;
-        if (
-          !node.gifController &&
-          !suppressedByIgnore &&
-          this.onGifFound &&
-          window.VSC.GifObserver?.isGifElement(node)
-        ) {
-          this.onGifFound(node, node.parentNode || mutation.target);
-        } else if (node.gifController && node.gifController.pending !== true && this.onGifRemoved && !window.VSC.GifObserver?.isGifElement(node)) {
-          this.onGifRemoved(node);
-        }
-        return;
+    if (mutation.attributeName === 'src' && mutation.target.nodeName === 'IMG') {
+      const node = mutation.target;
+      const srcChangedSinceTeardown =
+        node._vscTeardownSrc !== undefined && node.src !== node._vscTeardownSrc;
+      const suppressedByIgnore = node.vscGifIgnore && !srcChangedSinceTeardown;
+      if (
+        !node.gifController &&
+        !suppressedByIgnore &&
+        this.onGifFound &&
+        window.VSC.GifObserver?.isGifElement(node)
+      ) {
+        this.onGifFound(node, node.parentNode || mutation.target);
+      } else if (
+        node.gifController &&
+        node.gifController.pending !== true &&
+        this.onGifRemoved &&
+        !window.VSC.GifObserver?.isGifElement(node)
+      ) {
+        this.onGifRemoved(node);
       }
+      return;
+    }
 
     // Handle style and class changes that might affect video visibility
     if (mutation.attributeName === 'style' || mutation.attributeName === 'class') {
@@ -236,7 +241,8 @@ class VideoMutationObserver {
           this.onGifFound &&
           window.VSC.GifObserver?.isGifElement(node)
         ) {
-          const srcChangedSinceTeardown = node._vscTeardownSrc !== undefined && node.src !== node._vscTeardownSrc;
+          const srcChangedSinceTeardown =
+            node._vscTeardownSrc !== undefined && node.src !== node._vscTeardownSrc;
           const suppressedByIgnore = node.vscGifIgnore && !srcChangedSinceTeardown;
           if (added && !suppressedByIgnore) {
             this.onGifFound(node, parent);
@@ -247,8 +253,9 @@ class VideoMutationObserver {
               node.gifController.pending !== true &&
               // If the controller's canvas is still in the DOM the img was
               // intentionally removed as part of canvas-replacement — skip.
-              !(node.gifController._canvas &&
-                document.body?.contains(node.gifController._canvas)) &&
+              !(
+                node.gifController._canvas && document.body?.contains(node.gifController._canvas)
+              ) &&
               typeof node.gifController.remove === 'function'
             ) {
               this.onGifRemoved(node);

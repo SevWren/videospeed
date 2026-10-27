@@ -82,9 +82,11 @@ runner.test('GifFrameCache is idempotent for addGifElement (no duplicate entries
   config.addGifElement(img);
   config.addGifElement(img);
   const elements = config.getGifElements();
-  const count = elements.filter(el => el === img).length;
+  const count = elements.filter((el) => el === img).length;
   config.removeGifElement(img);
-  if (count !== 1) throw new Error(`Expected exactly 1 entry for duplicate addGifElement, got ${count}`);
+  if (count !== 1) {
+    throw new Error(`Expected exactly 1 entry for duplicate addGifElement, got ${count}`);
+  }
 });
 
 runner.test('GifFrameCache memory budget check prevents over-allocation', () => {
@@ -92,9 +94,21 @@ runner.test('GifFrameCache memory budget check prevents over-allocation', () => 
   const saved = cache._allocated;
   const budget = window.VSC.Constants.GIF_GLOBAL_MEMORY_BUDGET_BYTES;
   cache._allocated = budget - 100;
-  const canAllocSmall = cache.requestAllocation ? cache.requestAllocation(100) : cache.tryAllocate ? (() => { const r = cache.tryAllocate(100); if (r) cache._allocated -= 100; return r; })() : true;
+  const canAllocSmall = cache.requestAllocation
+    ? cache.requestAllocation(100)
+    : cache.tryAllocate
+      ? (() => {
+          const r = cache.tryAllocate(100);
+          if (r) {
+            cache._allocated -= 100;
+          }
+          return r;
+        })()
+      : true;
   cache._allocated = saved;
-  if (canAllocSmall !== true) throw new Error('Expected small allocation within budget to succeed');
+  if (canAllocSmall !== true) {
+    throw new Error('Expected small allocation within budget to succeed');
+  }
 });
 
 export default runner;

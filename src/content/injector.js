@@ -123,7 +123,6 @@ function setupMessageBridge() {
     }
   };
 
-
   // Listen for messages from popup (in content script context)
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // Forward message to injected page context
@@ -181,14 +180,18 @@ function setupMessageBridge() {
   //   iframe → parent  : { type:'VSC_GIF_BYTES_RESPONSE', requestId, success, bytes? }
   //   iframe → parent  : { type:'VSC_GIF_FETCHER_READY' }  (once, on DOMContentLoaded)
   (function setupFileGifFetcherProxy() {
-    if (!location.href.startsWith('file://')) return; // Only needed on file:// pages
+    if (!location.href.startsWith('file://')) {
+      return;
+    } // Only needed on file:// pages
 
     let fetcherIframe = null;
     let iframeReady = false;
     const pending = []; // Requests that arrived before iframe finished loading
 
     function ensureIframe() {
-      if (fetcherIframe) return;
+      if (fetcherIframe) {
+        return;
+      }
       fetcherIframe = document.createElement('iframe');
       fetcherIframe.src = chrome.runtime.getURL('src/gif-file-fetcher.html');
       fetcherIframe.style.cssText =
@@ -211,8 +214,12 @@ function setupMessageBridge() {
     // on the page window directly from iframe.postMessage(parent) and are
     // handled by gif-controller.js's window.addEventListener('message').
     window.addEventListener('message', (event) => {
-      if (!event.data || typeof event.data !== 'object') return;
-      if (event.data.type !== 'VSC_GIF_FETCHER_READY') return;
+      if (!event.data || typeof event.data !== 'object') {
+        return;
+      }
+      if (event.data.type !== 'VSC_GIF_FETCHER_READY') {
+        return;
+      }
       iframeReady = true;
       pending.forEach(({ url, requestId }) => dispatchToIframe(url, requestId));
       pending.length = 0;
@@ -221,7 +228,9 @@ function setupMessageBridge() {
     // Receive requests from the page world (gif-controller.js).
     window.addEventListener('VSC_FETCH_GIF_BYTES', (event) => {
       const { url, requestId } = event.detail || {};
-      if (!url || !requestId || !url.startsWith('file://')) return;
+      if (!url || !requestId || !url.startsWith('file://')) {
+        return;
+      }
       ensureIframe();
       if (iframeReady) {
         dispatchToIframe(url, requestId);
@@ -283,21 +292,33 @@ function setupMessageBridge() {
   // chrome.storage.sync.get(null) re-fetch — so there is exactly one IPC call
   // per onChanged invocation regardless of how many frames are on the page.
   const _VSC_USER_CONTROLLED_KEYS = new Set([
-    'keyBindings', 'rememberSpeed', 'forceLastSavedSpeed', 'audioBoolean',
-    'startHidden', 'controllerOpacity', 'controllerButtonSize', 'logLevel',
-    'blacklist', 'enabled', 'gifSpeedStep',
+    'keyBindings',
+    'rememberSpeed',
+    'forceLastSavedSpeed',
+    'audioBoolean',
+    'startHidden',
+    'controllerOpacity',
+    'controllerButtonSize',
+    'logLevel',
+    'blacklist',
+    'enabled',
+    'gifSpeedStep',
   ]);
 
   chrome.storage.onChanged.addListener((changes, areaName) => {
     try {
-      if (areaName !== 'sync') return;
+      if (areaName !== 'sync') {
+        return;
+      }
       const patch = {};
       for (const key of _VSC_USER_CONTROLLED_KEYS) {
         if (Object.prototype.hasOwnProperty.call(changes, key)) {
           patch[key] = changes[key].newValue;
         }
       }
-      if (Object.keys(patch).length === 0) return;
+      if (Object.keys(patch).length === 0) {
+        return;
+      }
       window.dispatchEvent(new CustomEvent('VSC_USER_SETTINGS', { detail: patch }));
     } catch (error) {
       if (!isExtensionContextInvalidated(error)) {

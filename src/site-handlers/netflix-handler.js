@@ -79,7 +79,9 @@ class NetflixHandler extends window.VSC.BaseSiteHandler {
    * @returns {boolean} True if video should be ignored
    */
   shouldIgnoreVideo(video) {
-    if (!video || video.tagName !== 'VIDEO') return false;
+    if (!video || video.tagName !== 'VIDEO') {
+      return false;
+    }
     // Ignore preview videos or thumbnails
     return (
       video.classList.contains('preview-video') ||

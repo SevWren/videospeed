@@ -14,7 +14,9 @@ class DragHandler {
   static handleDrag(video, e) {
     const controller = video.vsc.div;
     const shadowController = controller.shadowRoot?.querySelector('#controller');
-    if (!shadowController) return;
+    if (!shadowController) {
+      return;
+    }
 
     // Find nearest parent of same size as video parent
     const parentElement = window.VSC.DomUtils.findVideoParent(controller);

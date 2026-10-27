@@ -67,7 +67,11 @@ if (!window.VSC.VideoSpeedConfig) {
 
         const rawStep = Number(storage.gifSpeedStep);
         this.settings.gifSpeedStep =
-          Number.isFinite(rawStep) && rawStep >= window.VSC.Constants.SPEED_LIMITS.MIN && rawStep <= 1.0 ? rawStep : 0.1;
+          Number.isFinite(rawStep) &&
+          rawStep >= window.VSC.Constants.SPEED_LIMITS.MIN &&
+          rawStep <= 1.0
+            ? rawStep
+            : 0.1;
 
         // Ensure display binding exists (for upgrades)
         this.ensureDisplayBinding(storage);
@@ -113,7 +117,9 @@ if (!window.VSC.VideoSpeedConfig) {
      * @param {Object} patch - Partial settings object from the relay
      */
     applySettings(patch = {}) {
-      if (!patch || typeof patch !== 'object') return;
+      if (!patch || typeof patch !== 'object') {
+        return;
+      }
       try {
         Object.assign(this.settings, patch);
         if (patch.logLevel !== undefined) {
@@ -314,11 +320,17 @@ if (!window.VSC.VideoSpeedConfig) {
       return this.mediaElements;
     }
 
-    addGifElement(element) { this.gifElements.add(element); }
+    addGifElement(element) {
+      this.gifElements.add(element);
+    }
 
-    removeGifElement(element) { this.gifElements.delete(element); }
+    removeGifElement(element) {
+      this.gifElements.delete(element);
+    }
 
-    getGifElements() { return [...this.gifElements]; }
+    getGifElements() {
+      return [...this.gifElements];
+    }
   }
 
   // Create singleton instance

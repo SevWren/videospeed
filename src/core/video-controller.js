@@ -226,7 +226,9 @@ class VideoController {
    */
   setupEventHandlers() {
     const mediaEventAction = (event) => {
-      if (!event.target.currentSrc) { return; }
+      if (!event.target.currentSrc) {
+        return;
+      }
       let storedSpeed = this.config.settings.speeds[event.target.currentSrc];
 
       if (!this.config.settings.rememberSpeed) {

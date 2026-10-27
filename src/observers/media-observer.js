@@ -181,7 +181,9 @@ class MediaElementObserver {
    * @returns {boolean} True if valid
    */
   isValidMediaElement(media) {
-    if (!media || (media.tagName !== 'VIDEO' && media.tagName !== 'AUDIO')) { return false; }
+    if (!media || (media.tagName !== 'VIDEO' && media.tagName !== 'AUDIO')) {
+      return false;
+    }
     // Skip videos that are not in the DOM
     if (!media.isConnected) {
       window.VSC.logger.debug('Video not in DOM');
@@ -269,7 +271,9 @@ class MediaElementObserver {
       if (img.naturalWidth > 0 && img.naturalHeight > 0) {
         const w = img.naturalWidth || img.width || 0;
         const h = img.naturalHeight || img.height || 0;
-        return w >= window.VSC.Constants.GIF_MIN_SIZE_PX && h >= window.VSC.Constants.GIF_MIN_SIZE_PX;
+        return (
+          w >= window.VSC.Constants.GIF_MIN_SIZE_PX && h >= window.VSC.Constants.GIF_MIN_SIZE_PX
+        );
       }
       return true;
     });

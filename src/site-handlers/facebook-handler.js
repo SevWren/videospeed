@@ -61,7 +61,9 @@ class FacebookHandler extends window.VSC.BaseSiteHandler {
    * @private
    */
   setupFacebookObserver(document) {
-    if (document.__vscFacebookObserver) return;
+    if (document.__vscFacebookObserver) {
+      return;
+    }
     // Facebook loads content dynamically, so we need to watch for new videos
     const observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
@@ -107,7 +109,9 @@ class FacebookHandler extends window.VSC.BaseSiteHandler {
    * @returns {boolean} True if video should be ignored
    */
   shouldIgnoreVideo(video) {
-    if (!video || video.tagName !== 'VIDEO') return false;
+    if (!video || video.tagName !== 'VIDEO') {
+      return false;
+    }
     // Ignore story videos and other non-main content
     return (
       video.closest('[data-story-id]') !== null ||

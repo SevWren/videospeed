@@ -178,7 +178,9 @@ class EventManager {
     // Get the actual video element (handle shadow DOM)
     const video = event.composedPath()[0];
 
-    if (!(video instanceof HTMLMediaElement)) { return; }
+    if (!(video instanceof HTMLMediaElement)) {
+      return;
+    }
 
     // Handle forced last saved speed
     if (this.config.settings.forceLastSavedSpeed) {
@@ -206,7 +208,9 @@ class EventManager {
     }
 
     const speedIndicator = video.vsc.speedIndicator;
-    if (!speedIndicator) { return; }
+    if (!speedIndicator) {
+      return;
+    }
     const src = video.currentSrc;
     const speed = Number(video.playbackRate.toFixed(2));
 

@@ -45,7 +45,9 @@ class AmazonHandler extends window.VSC.BaseSiteHandler {
    * @returns {boolean} True if video should be ignored
    */
   shouldIgnoreVideo(video) {
-    if (!video || video.tagName !== 'VIDEO') return false;
+    if (!video || video.tagName !== 'VIDEO') {
+      return false;
+    }
     // Don't reject videos that are still loading
     if (video.readyState < 2) {
       return false;

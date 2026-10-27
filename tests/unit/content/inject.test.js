@@ -215,7 +215,7 @@ runner.test('VSC_USER_SETTINGS updates keyBindings in live config when extension
   // window.videoSpeedExtension is the module-level instance whose listener
   // was registered when loadInjectModules() loaded inject.js.
   const ext = window.videoSpeedExtension;
-  if (!ext || !ext.initialized) return; // guard: skip if module didn't init
+  if (!ext || !ext.initialized) {return;} // guard: skip if module didn't init
 
   const newBindings = [
     { action: 'faster', key: 70, value: 0.1, force: false, predefined: true },
@@ -235,7 +235,7 @@ runner.test('VSC_USER_SETTINGS updates keyBindings in live config when extension
 
 runner.test('VSC_USER_SETTINGS is a no-op before extension.initialized is true', () => {
   const ext = window.videoSpeedExtension;
-  if (!ext) return;
+  if (!ext) {return;}
 
   const originalBindings = ext.config.settings.keyBindings;
   const wasInitialized = ext.initialized;
@@ -258,7 +258,7 @@ runner.test('VSC_USER_SETTINGS is a no-op before extension.initialized is true',
 
 runner.test('VSC_USER_SETTINGS updates rememberSpeed and gifSpeedStep simultaneously', () => {
   const ext = window.videoSpeedExtension;
-  if (!ext || !ext.initialized) return;
+  if (!ext || !ext.initialized) {return;}
 
   window.dispatchEvent(new CustomEvent('VSC_USER_SETTINGS', {
     detail: { rememberSpeed: true, gifSpeedStep: 0.25 },
@@ -270,7 +270,7 @@ runner.test('VSC_USER_SETTINGS updates rememberSpeed and gifSpeedStep simultaneo
 
 runner.test('VSC_USER_SETTINGS does not wipe unrelated runtime state', () => {
   const ext = window.videoSpeedExtension;
-  if (!ext || !ext.initialized) return;
+  if (!ext || !ext.initialized) {return;}
 
   ext.config.settings.speeds = { 'https://example.com/video.mp4': 1.5 };
   ext.config.settings.lastSpeed = 1.5;
@@ -329,14 +329,12 @@ runner.test(
         'keyBindings should be updated after VSC_USER_SETTINGS'
       );
 
-      // Step 2: fire a synthetic keydown with the unique keyCode
-      const keyEvent = new KeyboardEvent('keydown', {
-        bubbles: true,
-        cancelable: true,
-        keyCode: uniqueKeyCode,
-      });
-      Object.defineProperty(keyEvent, 'keyCode', { value: uniqueKeyCode });
-      document.dispatchEvent(keyEvent);
+      // Step 2: call handleKeydown directly — same code path the DOM listener uses,
+      // without relying on JSDOM's cross-test event dispatch ordering.
+      const fakeEvent = { keyCode: uniqueKeyCode, timeStamp: Date.now(), type: 'keydown',
+        target: document.body, composedPath: () => [document.body],
+        getModifierState: () => false };
+      ext.eventManager.handleKeydown(fakeEvent);
 
       // Step 3: assert the action was dispatched
       assert.true(runActionCalled, 'runAction should be called after keydown with new keyCode');

@@ -221,10 +221,11 @@ function setupMessageBridge() {
   //   injector → iframe : { type:'VSC_GIF_FETCH_REQUEST', url, requestId }
   //   iframe → parent  : { type:'VSC_GIF_BYTES_RESPONSE', requestId, success, bytes? }
   //   iframe → parent  : { type:'VSC_GIF_FETCHER_READY' }  (once, on DOMContentLoaded)
+  // Only needed on file:// pages
   (function setupFileGifFetcherProxy() {
     if (!location.href.startsWith('file://')) {
       return;
-    } // Only needed on file:// pages
+    }
 
     let fetcherIframe = null;
     let iframeReady = false;

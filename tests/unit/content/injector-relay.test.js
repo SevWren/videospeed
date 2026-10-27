@@ -35,6 +35,7 @@ runner.afterEach(() => {
 // Helper: simulate what setupMessageBridge does — register a storage.onChanged listener
 // that filters USER_CONTROLLED_KEYS and dispatches VSC_USER_SETTINGS
 function registerRelay() {
+  // Must match USER_CONTROLLED_KEYS in src/content/injector.js — update both if the set changes
   const USER_CONTROLLED_KEYS = new Set([
     'keyBindings',
     'rememberSpeed',

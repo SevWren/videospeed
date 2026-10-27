@@ -51,7 +51,7 @@ export function extractCitations(registrySrc) {
   const seen = new Set();
 
   // Match path::symbol   e.g.  src/core/gif-controller.js::_drawFrame
-  const symbolRe = /`?((?:src|tests|scripts)\/[\w.\-\/]+\.(?:js|mjs))::(\w+)`?/g;
+  const symbolRe = /`?((?:src|tests|scripts)\/[\w.\-/]+\.(?:js|mjs))::(\w+)`?/g;
   let m;
   while ((m = symbolRe.exec(registrySrc)) !== null) {
     const raw = m[0].replace(/`/g, '').trim();
@@ -63,7 +63,7 @@ export function extractCitations(registrySrc) {
 
   // Match path:line   e.g.  src/core/gif-controller.js:184
   // (but not path::symbol which was already consumed above)
-  const lineRe = /`?((?:src|tests|scripts)\/[\w.\-\/]+\.(?:js|mjs)):(\d+)`?/g;
+  const lineRe = /`?((?:src|tests|scripts)\/[\w.\-/]+\.(?:js|mjs)):(\d+)`?/g;
   while ((m = lineRe.exec(registrySrc)) !== null) {
     const raw = m[0].replace(/`/g, '').trim();
     if (!seen.has(raw)) {
@@ -82,14 +82,14 @@ export function extractCitations(registrySrc) {
  * Returns true if the symbol is found as a word boundary match.
  */
 export function symbolExistsInFile(fileSrc, symbol) {
-  if (!symbol) return true;
+  if (!symbol) {return true;}
   // Look for: function symbol, const symbol, let symbol, var symbol,
   //           symbol(, symbol =, _symbol (private convention)
   const re = new RegExp(
-    '(?:function\\s+' + escapeRegex(symbol) + '\\b' +
-    '|(?:const|let|var)\\s+' + escapeRegex(symbol) + '\\b' +
-    '|' + escapeRegex(symbol) + '\\s*[=(]' +
-    '|' + escapeRegex(symbol) + '\\s*:\\s*function' +
+    `(?:function\\s+${  escapeRegex(symbol)  }\\b` +
+    `|(?:const|let|var)\\s+${  escapeRegex(symbol)  }\\b` +
+    `|${  escapeRegex(symbol)  }\\s*[=(]` +
+    `|${  escapeRegex(symbol)  }\\s*:\\s*function` +
     ')'
   );
   return re.test(fileSrc);
@@ -203,7 +203,7 @@ export function verifyCitations(opts = {}) {
     if (errors.length > 0) {
       console.error('\nverify-citations FAILED:\n');
       for (const e of errors) {
-        console.error('  ' + e);
+        console.error(`  ${  e}`);
       }
       process.exit(1);
     }

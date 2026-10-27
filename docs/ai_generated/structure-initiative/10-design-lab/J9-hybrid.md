@@ -329,4 +329,22 @@ All 14 PBs have at least a seam card entry. P2–P6 have implemented behavioral 
 
 ---
 
+---
+
+## Implementation Note: Agent Role Definitions
+
+J9 proposed `.claude/agents/gif-specialist.md`, `site-handler-specialist.md`, and `settings-specialist.md` as the three sub-agent role definitions. The implemented set diverges from these names:
+
+**Implemented roles**: `implement.md`, `triage.md`, `review.md`, `doc-gardener.md`, `release-engineer.md`
+
+**Rationale for divergence**: J9's proposals were file-name sketches tied to GIF/site-handler/settings task domains. H4's role design instead organized agents by *task type* (what the agent does) rather than *domain* (which module it works on):
+
+- `implement` — general code implementation with seam-card pre-conditions
+- `triage` — issue triage and labeling using the issue tracker
+- `review` — code review against the PB registry and ADR suite
+- `doc-gardener` — documentation maintenance (seam cards, ADRs, registry updates)
+- `release-engineer` — version bump, zip, and WAR consistency checks
+
+This set covers a broader operational surface than J9's three file-specialist roles, and maps more directly to the workflow stages agents actually perform. The seam-card pre-condition approach from J9 (agents must read relevant seam cards before editing a module) is preserved in `implement.md`.
+
 *J9 hybrid design complete. Projected score: ~905/1000. Total new files: 47. All additive, zero ZERO-DIFF surface touched.*

@@ -32,7 +32,7 @@ const REPO_ROOT = resolve(__dirname, '..');
  * Returns an array of absolute file paths.
  */
 export function findSeamCards(seamsDir) {
-  if (!existsSync(seamsDir)) return [];
+  if (!existsSync(seamsDir)) {return [];}
   let entries;
   try {
     entries = readdirSync(seamsDir);
@@ -238,7 +238,7 @@ export function checkSeams(opts = {}) {
     if (errors.length > 0) {
       console.error('\ncheck-seams FAILED:\n');
       for (const e of errors) {
-        console.error('  ' + e);
+        console.error(`  ${  e}`);
       }
       process.exit(1);
     }

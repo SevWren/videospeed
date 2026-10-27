@@ -20,7 +20,7 @@
  * Usage: node scripts/check-docs.mjs
  */
 
-import { readFileSync, existsSync, readdirSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -82,7 +82,7 @@ export function extractPathReferences(src) {
   // Deduplicate by path
   const seen = new Set();
   return refs.filter(r => {
-    if (seen.has(r.path)) return false;
+    if (seen.has(r.path)) {return false;}
     seen.add(r.path);
     return true;
   });
@@ -92,10 +92,10 @@ export function extractPathReferences(src) {
  * Returns true if a path is a concrete file path (not a glob, not SHA-suffixed).
  */
 function isConcreteFilePath(p) {
-  if (!p) return false;
-  if (p.includes('*')) return false;   // glob pattern
-  if (p.includes('@')) return false;   // SHA suffix e.g. file.js:func@abc123
-  if (p.endsWith('/')) return false;   // directory reference
+  if (!p) {return false;}
+  if (p.includes('*')) {return false;}   // glob pattern
+  if (p.includes('@')) {return false;}   // SHA suffix e.g. file.js:func@abc123
+  if (p.endsWith('/')) {return false;}   // directory reference
   return true;
 }
 
@@ -103,9 +103,9 @@ function isConcreteFilePath(p) {
  * Returns true if a path looks like a local repo path (not a URL).
  */
 function isLocalRepoPath(p) {
-  if (!p) return false;
-  if (p.startsWith('http://') || p.startsWith('https://') || p.startsWith('//')) return false;
-  if (p.startsWith('#')) return false;
+  if (!p) {return false;}
+  if (p.startsWith('http://') || p.startsWith('https://') || p.startsWith('//')) {return false;}
+  if (p.startsWith('#')) {return false;}
   return (
     p.startsWith('src/') ||
     p.startsWith('docs/') ||
@@ -201,7 +201,7 @@ export function checkDocs(opts = {}) {
     if (errors.length > 0) {
       console.error('\ncheck-docs FAILED:\n');
       for (const e of errors) {
-        console.error('  ' + e);
+        console.error(`  ${  e}`);
       }
       process.exit(1);
     }

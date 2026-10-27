@@ -36,7 +36,7 @@ const REPO_ROOT = resolve(__dirname, '..');
 export function parseInjectorModules(injectorSrc) {
   // Match the modules = [ ... ] block (multi-line)
   const blockMatch = injectorSrc.match(/const\s+modules\s*=\s*\[([\s\S]*?)\];/);
-  if (!blockMatch) return [];
+  if (!blockMatch) {return [];}
 
   const block = blockMatch[1];
   const paths = [];
@@ -66,10 +66,10 @@ export function expandGlob(pattern, repoRoot) {
   const filePart = pattern.slice(lastSlash + 1);
 
   const absDir = join(repoRoot, dirPart);
-  if (!existsSync(absDir)) return [];
+  if (!existsSync(absDir)) {return [];}
 
   // Build a simple regex from the file glob (only * wildcard supported)
-  const fileRegex = new RegExp('^' + filePart.replace(/\./g, '\\.').replace(/\*/g, '.*') + '$');
+  const fileRegex = new RegExp(`^${  filePart.replace(/\./g, '\\.').replace(/\*/g, '.*')  }$`);
 
   let entries;
   try {
@@ -84,7 +84,7 @@ export function expandGlob(pattern, repoRoot) {
     let stat;
     try { stat = statSync(absEntry); } catch { continue; }
     if (stat.isFile() && fileRegex.test(entry)) {
-      results.push(dirPart + '/' + entry);
+      results.push(`${dirPart  }/${  entry}`);
     }
   }
   return results;
@@ -99,7 +99,7 @@ export function parseWARPatterns(manifestSrc) {
   try {
     manifest = JSON.parse(manifestSrc);
   } catch (e) {
-    throw new Error('Failed to parse manifest.json: ' + e.message);
+    throw new Error(`Failed to parse manifest.json: ${  e.message}`);
   }
 
   const patterns = [];
@@ -107,7 +107,7 @@ export function parseWARPatterns(manifestSrc) {
   for (const entry of war) {
     const resources = Array.isArray(entry.resources) ? entry.resources : [entry.resources];
     for (const r of resources) {
-      if (typeof r === 'string') patterns.push(r);
+      if (typeof r === 'string') {patterns.push(r);}
     }
   }
   return patterns;
@@ -132,7 +132,7 @@ export function expandWARPatterns(patterns, repoRoot) {
  */
 export function parseSeamIndexModuleCount(seamIndexSrc) {
   const m = seamIndexSrc.match(/^module-count:\s*(\d+)/m);
-  if (m) return parseInt(m[1], 10);
+  if (m) {return parseInt(m[1], 10);}
   return null;
 }
 
@@ -188,7 +188,7 @@ export function checkStructure(opts = {}) {
     return { errors, warnings };
   }
 
-  const warExpanded = expandWARPatterns(warPatterns, repoRoot);
+  expandWARPatterns(warPatterns, repoRoot);
 
   // --- 3. Check every injected module exists on disk ---
   for (const mod of injectedModules) {
@@ -207,7 +207,7 @@ export function checkStructure(opts = {}) {
   for (const mod of injectedModules) {
     // WAR glob expansion: check if any WAR pattern covers this path
     const coveredByPattern = warPatterns.some(pattern => {
-      if (!pattern.includes('*')) return pattern === mod;
+      if (!pattern.includes('*')) {return pattern === mod;}
       const lastSlash = pattern.lastIndexOf('/');
       const patternDir = pattern.slice(0, lastSlash);
       const patternFile = pattern.slice(lastSlash + 1);
@@ -215,8 +215,8 @@ export function checkStructure(opts = {}) {
       const modLastSlash = mod.lastIndexOf('/');
       const modDir = mod.slice(0, modLastSlash);
       const modFile = mod.slice(modLastSlash + 1);
-      if (patternDir !== modDir) return false;
-      const fileRegex = new RegExp('^' + patternFile.replace(/\./g, '\\.').replace(/\*/g, '.*') + '$');
+      if (patternDir !== modDir) {return false;}
+      const fileRegex = new RegExp(`^${  patternFile.replace(/\./g, '\\.').replace(/\*/g, '.*')  }$`);
       return fileRegex.test(modFile);
     });
 
@@ -240,7 +240,7 @@ export function checkStructure(opts = {}) {
       errors.push(
         `SEAM-INDEX MISMATCH: docs/ai_generated/SEAM-INDEX.md declares module-count: ${moduleCount} ` +
         `but injector.js modules[] has ${injectedModules.length} entries. ` +
-        `Update the module-count field in SEAM-INDEX.md to match.`
+        'Update the module-count field in SEAM-INDEX.md to match.'
       );
     }
   } else {
@@ -272,13 +272,13 @@ export function checkStructure(opts = {}) {
     if (errors.length > 0) {
       console.error('\ncheck-structure FAILED:\n');
       for (const e of errors) {
-        console.error('  ' + e);
+        console.error(`  ${  e}`);
       }
       process.exit(1);
     }
 
     console.log('check-structure: OK');
-    console.log(`  injector.js modules checked, all consistent with manifest.json WAR.`);
+    console.log('  injector.js modules checked, all consistent with manifest.json WAR.');
     if (warnings.length > 0) {
       console.log(`  ${warnings.length} warning(s) — see above.`);
     }

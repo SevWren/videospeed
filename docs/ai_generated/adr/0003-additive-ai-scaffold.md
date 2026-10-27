@@ -49,6 +49,44 @@ Per charter §3 (R-09) and the ZERO-DIFF constraint:
 
 ---
 
+## Scorecard
+
+J8 independent scoring (see full rationale in `docs/ai_generated/structure-initiative/10-design-lab/J8-scoring.md`).
+
+Weighted scores out of 100 × 10 = 1000 max. Weights: AI localization 25, change locality 20, enforceability 15, migration cost 15, human legibility 10, MV3 fit 10, tool portability 5.
+
+| Criterion (weight) | J1 | J2 | J3 | J4 | J5 | J6 | **J9 (hybrid)** |
+|---|---|---|---|---|---|---|---|
+| AI localization (25) | 8 | 6 | 7 | 5 | 5 | 9 | ~9 |
+| Change locality (20) | 6 | 7 | 8 | 7 | 6 | 8 | ~8 |
+| Enforceability (15) | 8 | 4 | 5 | 7 | 5 | 9 | ~9 |
+| Migration cost (15) | 10 | 7 | 5 | 2 | 4 | 9 | ~9 |
+| Human legibility (10) | 7 | 8 | 8 | 6 | 5 | 8 | ~8 |
+| MV3 fit (10) | 9 | 8 | 6 | 7 | 6 | 9 | ~9 |
+| Tool portability (5) | 7 | 7 | 7 | 5 | 6 | 8 | ~8 |
+| **TOTAL** | **785** | **650** | **660** | **555** | **520** | **865** | **~905** |
+| Regression safety | PASS | PASS | PASS | PASS* | PASS* | PASS | **PASS** |
+
+J9 projected score ~905 assumes J1's implemented contract tests (+20 over J6 on enforceability) combine with J6's seam-graph spine without score dilution. The two designs share no files; gains are additive.
+
+---
+
+## Rejected alternatives
+
+**J2 (Runtime-World Layering, 650).** Phase 0 deliverables (world-map annotations) achieve only 0–2 file median reduction — the smallest gain of any design. Full localization benefit requires Phases 1–6 which move every `src/` file into `worlds/` subdirectories, violating the additive-only constraint for this initiative. Filed as MT-004 for a follow-on.
+
+**J3 (Feature-Sliced, 660).** Near-J6 localization gain (-68% median) but requires characterization tests for 12 untested modules before Wave 1 can move any file. The gating condition is part of J9's own scope; J3 cannot proceed until J9 contract tests are green. Filed as MT-004.
+
+**J4 (Build Step / esbuild, 555).** Converts all 25 source modules to ESM bundles; introduces dist/ artifact layer that harms AI navigation (agents may read stale built output). P3 (double-load guard removal) carries an unverifiable regression risk in JSDOM. Lowest reversibility score (2/10). Filed as MT-004, gated on J3.
+
+**J5 (GIF Engine Package, 520).** GIF-domain gains only; neutral for 7 of 12 D-tasks. Phase 2 (extension consumes the package) is J4-contingent. Does not satisfy R-01 or R-04 in Phase 1 alone. Filed as MT-004, J4-contingent.
+
+**J6 alone (Seam-Map + Assertion Mesh, 865).** Would have been selected if J1 had not been designed. Rejected as the sole design only because J1's ADR suite and implemented contract tests are available at zero additional regression risk. The J6 spine (SEAM-INDEX, seam cards, check:seams) is adopted wholesale into J9.
+
+**J1 alone (Additive Guardrails, 785).** Strong ADR suite and only design with fully implemented (not stubbed) contract tests for P2–P6. Not selected as primary because J6's SEAM-INDEX provides a superior single source of truth for the module list (eliminates RCC-02 more completely than J1's module registry document). Adopted into J9 for its ADR and test contributions.
+
+---
+
 ## Considered Options
 
 ### Option 1: J1 — Additive Guardrails (score 785, J8 independent)

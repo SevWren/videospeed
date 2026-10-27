@@ -118,6 +118,18 @@ if (!window.VSC.GifController) {
         // When the Netscape extension is absent gifuct returns undefined/null;
         // default to 0 (infinite) to match what every browser does.
         gc._loopCount = (parsed.loopCount == null) ? 0 : parsed.loopCount;
+
+        // E-2: Reject GIFs smaller than GIF_MIN_SIZE_PX in either dimension before
+        // allocating memory.  1×1 tracking-pixel GIFs (e.g. cleardot.gif) are
+        // detected by isGifSrc and pass the unloaded-image size filter in
+        // scanForGifs, so this guard is the last line of defence at create() time.
+        if (
+          gc._gifWidth < window.VSC.Constants.GIF_MIN_SIZE_PX ||
+          gc._gifHeight < window.VSC.Constants.GIF_MIN_SIZE_PX
+        ) {
+          return null;
+        }
+
         // Stash the GIF background color (from LSD + GCT) so we can pre-fill
         // the composite canvas.  Many GIFs use transparent pixels to mean
         // "show the background", so starting with the right background avoids
@@ -154,8 +166,12 @@ if (!window.VSC.GifController) {
           return null;
         }
 
-        if (!frames || frames.length === 0) {
-          // Static GIF or decode failure - don't replace
+        if (!frames || frames.length <= 1) {
+          // Non-animated GIF (0 or 1 frame) — nothing to speed up, don't replace.
+          // Single-frame GIFs include 1×1 tracking pixels that passed the pre-decode
+          // size filter because they were unloaded (naturalWidth=0) at scan time.
+          // E-1: fix for Bug B — extends the original `=== 0` guard to cover
+          // single-frame static GIFs (frames.length === 1).
           window.VSC.GifFrameCache.releaseAllocation(frameBytes);
           gc._allocatedBytes = 0;
           return null;

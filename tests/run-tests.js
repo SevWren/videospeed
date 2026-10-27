@@ -176,6 +176,7 @@ async function runTests() {
       'unit/core/gif-frame-engine.test.js',
       'unit/observers/gif-observer.test.js',
       'unit/core/gif-controller.test.js',
+      'unit/core/gif-controller-static.test.js',
       'unit/core/action-handler-gif.test.js',
     ];
   } else if (testType === 'integration') {
@@ -200,6 +201,7 @@ async function runTests() {
       'unit/core/gif-frame-engine.test.js',
       'unit/observers/gif-observer.test.js',
       'unit/core/gif-controller.test.js',
+      'unit/core/gif-controller-static.test.js',
       'unit/core/action-handler-gif.test.js',
       'integration/module-integration.test.js',
       'integration/gif-integration.test.js',

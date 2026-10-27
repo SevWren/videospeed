@@ -3,67 +3,73 @@
 **Program**: AI-Driven Development Scaffold
 **Base SHA**: `e904370863d69a2b5d853af62745141953c4860d`
 **Work branch**: `ai-structure/initiative`
+**Status**: **COMPLETE — G7 PASS**
 
 ---
 
 ## Current Phase and Gate
 
-| Phase | Status | Gate | Result |
-|---|---|---|---|
-| P0 Bootstrap | ✅ COMPLETE | G0 | PASS |
-| P1 Recon & Baseline | 🔄 IN PROGRESS | G1 | PENDING |
-| P2 Deep Analysis | PENDING | G2 | — |
-| P3 Research | PENDING | G2 (simultaneous) | — |
-| P4 Synthesis | PENDING | G3 | — |
-| P5 Design Lab | PENDING | G4 | — |
-| P6 Scaffold Build | PENDING | G5 | — |
-| P7 Verification | PENDING | G6 | — |
-| P8 Closeout | PENDING | G7 | — |
-
----
-
-## Last Green Commit
-
-`(G0 commit — see git log)`
-
----
-
-## Gate Results
-
-| Gate | Command | Output File | Verdict | Commit SHA |
+| Phase | Status | Gate | Result | Commit |
 |---|---|---|---|---|
-| G0 | `git branch --list ai-structure/initiative` | n/a | PASS | (initial commit) |
+| P0 Bootstrap | ✅ COMPLETE | G0 | PASS | 323c95f |
+| P1 Recon & Baseline | ✅ COMPLETE | G1 | PASS | 8113412 |
+| P2 Deep Analysis | ✅ COMPLETE | G2 | PASS | f697e7f |
+| P3 Research | ✅ COMPLETE | G2 | PASS | f697e7f |
+| P4 Synthesis | ✅ COMPLETE | G3 | PASS | a7554a9 |
+| P5 Design Lab | ✅ COMPLETE | G4 | PASS | de6e733 |
+| P6 Scaffold Build | ✅ COMPLETE | G5 | PASS | eebf01a |
+| P7 Verification | ✅ COMPLETE | G6 | ACCEPT | 02ff4cb |
+| P8 Closeout | ✅ COMPLETE | G7 | PASS | (this commit) |
 
 ---
 
-## Open RAID Items
+## G7 Acceptance Checklist
 
-See `RAID.md`.
+| # | Criterion | Proof | Status |
+|---|---|---|---|
+| 1 | Zero diff on protected surface | `git diff --name-status master...HEAD -- src manifest.json LICENSE PRIVACY.md` → empty | ✅ |
+| 2 | npm test = 133/133 | `npm test` output in A2-baseline.md and K-verification.md | ✅ |
+| 3 | Every cited path/line resolves | `npm run check:citations` → exit 0 | ✅ |
+| 4 | Every PB has registry row | `npm run check:docs` → exit 0; registry.md has 14 rows | ✅ |
+| 5 | Injector ⟺ manifest ⟺ registry agree | `npm run check:structure` → exit 0 | ✅ |
+| 6 | Cold-start trials: 60% reduction, 100% correct, 0 violations, 0 hallucinations | K-verification.md | ✅ |
+| 7 | Every Blocker/High finding mapped | findings-register.md × tickets/ README | ✅ |
+| 8 | Migration tickets exist | tickets/T01–T08 | ✅ |
+| 9 | ADR, scorecard, sensitivity, alternatives, pre-mortem | 10-design-lab/ J1-J9, ADR-0003 | ✅ |
+| 10 | STATE.md enables fresh resume | This file | ✅ |
 
 ---
 
-## Next Three Actions
+## Resume instructions for a fresh session
 
-1. Launch Team A (A1 Inventory, A2 Baseline, A3 Git Archaeology) in parallel
-2. Gate G1: verify `01-baseline/` populated, test result recorded
-3. Launch Teams B–H (P2) + Team I (P3) in parallel batches ≤ 6
+```bash
+git checkout ai-structure/initiative
+# Read this file first — program is COMPLETE
+# Read 99-executive-summary.md for full summary
+# Migration backlog: docs/ai_generated/structure-initiative/tickets/README.md
+# Human decisions needed: T01 (PRIVACY.md), T02 (zip), T03-T05 (src/ changes)
+```
+
+Key commands:
+```bash
+npm run check:structure   # module list integrity
+npm run check:seams       # seam card citations
+npm run check:docs        # agent doc path references
+npm run check:citations   # function/symbol citations
+npm run map:repo          # regenerate REPO_MAP.md
+npm test                  # 133/133 baseline
+```
 
 ---
 
-## Resume Instructions for a Fresh Session
+## Next three actions (for the human)
 
-To resume this program from scratch:
-1. Check out `ai-structure/initiative` branch: `git checkout ai-structure/initiative`
-2. Read this file first to find current phase
-3. Read `RAID.md` for blockers
-4. Read `findings-register.md` for findings so far
-5. Read the last gate's output files in the relevant `OUTPUT_ROOT/` subdirectory
-6. Continue from the "Next Three Actions" above
-7. All agents must use `base-sha: e904370863d69a2b5d853af62745141953c4860d`
-8. Run `npm test` to confirm baseline still 133/133 before proceeding
+1. **Approve T01** — fix PRIVACY.md cache claim before any Chrome Web Store release
+2. **Approve T02** — fix zip script to exclude agent instruction files
+3. **Decide T05** — does live settings propagation (StorageManager.onChanged relay) belong in scope?
 
-**Key constraints (never skip):**
-- `git diff --name-status master...HEAD -- src manifest.json LICENSE PRIVACY.md` must print nothing
-- Never use `npx jest` or add `jest.config.js`
-- Never include git remote URLs in output files
-- Weights in `00-charter.md` §3 are frozen — do not change
+---
+
+## Open RAID items
+
+See `RAID.md`. R-001 (ephemeral sandbox) remains open — push to remote after every gate.

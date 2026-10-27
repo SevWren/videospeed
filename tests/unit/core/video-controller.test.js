@@ -3,8 +3,17 @@
  * Using global variables to match browser extension architecture
  */
 
-import { installChromeMock, cleanupChromeMock, resetMockStorage } from '../../helpers/chrome-mock.js';
-import { SimpleTestRunner, assert, createMockVideo, createMockDOM } from '../../helpers/test-utils.js';
+import {
+  installChromeMock,
+  cleanupChromeMock,
+  resetMockStorage,
+} from '../../helpers/chrome-mock.js';
+import {
+  SimpleTestRunner,
+  assert,
+  createMockVideo,
+  createMockDOM,
+} from '../../helpers/test-utils.js';
 import { loadCoreModules } from '../../helpers/module-loader.js';
 
 // Load all required modules
@@ -78,7 +87,7 @@ runner.test('VideoController should initialize speed based on settings', async (
   const mockVideo = createMockVideo();
   mockDOM.container.appendChild(mockVideo);
 
-  const controller = new window.VSC.VideoController(mockVideo, null, config, actionHandler);
+  new window.VSC.VideoController(mockVideo, null, config, actionHandler);
 
   assert.equal(mockVideo.playbackRate, 2.0);
 });

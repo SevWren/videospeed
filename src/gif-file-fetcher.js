@@ -13,9 +13,13 @@
  */
 window.addEventListener('message', (event) => {
   const data = event.data;
-  if (!data || data.type !== 'VSC_GIF_FETCH_REQUEST') return;
+  if (!data || data.type !== 'VSC_GIF_FETCH_REQUEST') {
+    return;
+  }
   const { url, requestId } = data;
-  if (!url || !requestId || !url.startsWith('file://')) return;
+  if (!url || !requestId || !url.startsWith('file://')) {
+    return;
+  }
 
   const xhr = new XMLHttpRequest();
   xhr.open('GET', url, true);

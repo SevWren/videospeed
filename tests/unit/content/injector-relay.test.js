@@ -13,7 +13,11 @@
  * if the mock regresses, these tests catch it before the Seam B tests run.
  */
 
-import { installChromeMock, cleanupChromeMock, resetMockStorage } from '../../helpers/chrome-mock.js';
+import {
+  installChromeMock,
+  cleanupChromeMock,
+  resetMockStorage,
+} from '../../helpers/chrome-mock.js';
 import { SimpleTestRunner, assert } from '../../helpers/test-utils.js';
 
 const runner = new SimpleTestRunner();
@@ -22,9 +26,17 @@ const runner = new SimpleTestRunner();
 // If injector.js changes this set without updating the tests, Seam B tests
 // will catch the behavioural regression.
 const USER_CONTROLLED_KEYS = new Set([
-  'keyBindings', 'rememberSpeed', 'forceLastSavedSpeed', 'audioBoolean',
-  'startHidden', 'controllerOpacity', 'controllerButtonSize', 'logLevel',
-  'blacklist', 'enabled', 'gifSpeedStep',
+  'keyBindings',
+  'rememberSpeed',
+  'forceLastSavedSpeed',
+  'audioBoolean',
+  'startHidden',
+  'controllerOpacity',
+  'controllerButtonSize',
+  'logLevel',
+  'blacklist',
+  'enabled',
+  'gifSpeedStep',
 ]);
 
 function buildRelayPatch(changes) {
@@ -67,7 +79,9 @@ runner.test('resetMockStorage clears registered onChanged listeners', () => {
   resetMockStorage();
 
   let count = 0;
-  chrome.storage.onChanged.addListener(() => { count++; });
+  chrome.storage.onChanged.addListener(() => {
+    count++;
+  });
 
   // Reset — should clear the listener
   resetMockStorage();
@@ -104,10 +118,13 @@ runner.test('controlGifs change produces an empty patch (handled by dedicated ch
   assert.equal(Object.keys(patch).length, 0, 'controlGifs must not appear in relay patch');
 });
 
-runner.test('displayKeyCode change produces an empty patch (legacy field, key is in keyBindings)', () => {
-  const patch = buildRelayPatch({ displayKeyCode: { newValue: 68 } });
-  assert.equal(Object.keys(patch).length, 0, 'displayKeyCode must not appear in relay patch');
-});
+runner.test(
+  'displayKeyCode change produces an empty patch (legacy field, key is in keyBindings)',
+  () => {
+    const patch = buildRelayPatch({ displayKeyCode: { newValue: 68 } });
+    assert.equal(Object.keys(patch).length, 0, 'displayKeyCode must not appear in relay patch');
+  }
+);
 
 runner.test('mixed change: only user-controlled keys are relayed', () => {
   const newBindings = [{ action: 'faster', key: 70, value: 0.1, force: false, predefined: true }];
@@ -141,7 +158,8 @@ runner.test('all USER_CONTROLLED_KEYS pass through the relay', () => {
   }
   const patch = buildRelayPatch(changes);
   assert.equal(
-    Object.keys(patch).length, USER_CONTROLLED_KEYS.size,
+    Object.keys(patch).length,
+    USER_CONTROLLED_KEYS.size,
     'all USER_CONTROLLED_KEYS must appear in relay patch'
   );
   for (const key of USER_CONTROLLED_KEYS) {
@@ -154,7 +172,9 @@ runner.test('non-sync area produces no relay dispatch', () => {
   let dispatched = false;
   const origDispatch = window.dispatchEvent.bind(window);
   window.dispatchEvent = (event) => {
-    if (event.type === 'VSC_USER_SETTINGS') dispatched = true;
+    if (event.type === 'VSC_USER_SETTINGS') {
+      dispatched = true;
+    }
     return origDispatch(event);
   };
 

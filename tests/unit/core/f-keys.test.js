@@ -3,7 +3,11 @@
  * Verifies that the expanded keyboard handling works correctly
  */
 
-import { installChromeMock, cleanupChromeMock, resetMockStorage } from '../../helpers/chrome-mock.js';
+import {
+  installChromeMock,
+  cleanupChromeMock,
+  resetMockStorage,
+} from '../../helpers/chrome-mock.js';
 import { SimpleTestRunner, assert } from '../../helpers/test-utils.js';
 import { loadMinimalModules } from '../../helpers/module-loader.js';
 
@@ -14,7 +18,7 @@ await loadMinimalModules([
   '../../../src/core/storage-manager.js',
   '../../../src/core/settings.js',
   '../../../src/core/action-handler.js',
-  '../../../src/utils/event-manager.js'
+  '../../../src/utils/event-manager.js',
 ]);
 
 const runner = new SimpleTestRunner();
@@ -39,14 +43,18 @@ runner.test('F13-F24 keys should be valid key bindings', async () => {
       key: 111 + i, // F13=124, F14=125, etc.
       value: 0.1,
       force: false,
-      predefined: false
+      predefined: false,
     });
   }
 
   await config.save({ keyBindings: fKeyBindings });
   await config.load();
 
-  assert.equal(config.settings.keyBindings.length, fKeyBindings.length, 'All F-key bindings should be saved');
+  assert.equal(
+    config.settings.keyBindings.length,
+    fKeyBindings.length,
+    'All F-key bindings should be saved'
+  );
 
   // Verify each F-key binding
   for (let i = 0; i < fKeyBindings.length; i++) {
@@ -67,27 +75,33 @@ runner.test('Special keys beyond standard range should be accepted', async () =>
     { keyCode: 173, description: 'Media Mute' },
     { keyCode: 174, description: 'Media Volume Down' },
     { keyCode: 175, description: 'Media Volume Up' },
-    { keyCode: 179, description: 'Media Play/Pause' }
+    { keyCode: 179, description: 'Media Play/Pause' },
   ];
 
-  const specialKeyBindings = specialKeys.map(key => ({
+  const specialKeyBindings = specialKeys.map((key) => ({
     action: 'pause',
     key: key.keyCode,
     value: 0,
     force: false,
-    predefined: false
+    predefined: false,
   }));
 
   await config.save({ keyBindings: specialKeyBindings });
   await config.load();
 
-  assert.equal(config.settings.keyBindings.length, specialKeyBindings.length,
-    'All special key bindings should be saved');
+  assert.equal(
+    config.settings.keyBindings.length,
+    specialKeyBindings.length,
+    'All special key bindings should be saved'
+  );
 
   specialKeys.forEach((specialKey, index) => {
     const binding = config.settings.keyBindings[index];
-    assert.equal(binding.key, specialKey.keyCode,
-      `${specialKey.description} key should be saved correctly`);
+    assert.equal(
+      binding.key,
+      specialKey.keyCode,
+      `${specialKey.description} key should be saved correctly`
+    );
   });
 });
 
@@ -98,13 +112,7 @@ runner.test('Blacklisted keys should be properly handled in options UI', async (
   // Simulate the recordKeyPress function behavior with blacklisted keys
   const BLACKLISTED_KEYCODES = [9, 16, 17, 18, 91, 92, 93, 224];
 
-  BLACKLISTED_KEYCODES.forEach(keyCode => {
-    const mockEvent = {
-      keyCode: keyCode,
-      preventDefault: () => { },
-      stopPropagation: () => { }
-    };
-
+  BLACKLISTED_KEYCODES.forEach((keyCode) => {
     // In the real options.js, blacklisted keys would be prevented
     const isBlacklisted = BLACKLISTED_KEYCODES.includes(keyCode);
     assert.equal(isBlacklisted, true, `Key ${keyCode} should be blacklisted`);
@@ -112,7 +120,7 @@ runner.test('Blacklisted keys should be properly handled in options UI', async (
 
   // Verify that non-blacklisted keys would be accepted
   const allowedKeys = [124, 65, 32, 13]; // F13, A, Space, Enter
-  allowedKeys.forEach(keyCode => {
+  allowedKeys.forEach((keyCode) => {
     const isBlacklisted = BLACKLISTED_KEYCODES.includes(keyCode);
     assert.equal(isBlacklisted, false, `Key ${keyCode} should not be blacklisted`);
   });
@@ -127,13 +135,15 @@ runner.test('EventManager should handle F-keys correctly', async () => {
   actionHandler.eventManager = eventManager;
 
   // Add F13 key binding
-  config.settings.keyBindings = [{
-    action: 'faster',
-    key: 124, // F13
-    value: 0.1,
-    force: false,
-    predefined: false
-  }];
+  config.settings.keyBindings = [
+    {
+      action: 'faster',
+      key: 124, // F13
+      value: 0.1,
+      force: false,
+      predefined: false,
+    },
+  ];
 
   // Mock video element
   const mockVideo = {
@@ -143,9 +153,9 @@ runner.test('EventManager should handle F-keys correctly', async () => {
     currentTime: 0,
     duration: 100,
     classList: {
-      contains: (className) => false  // Mock classList for 'vsc-cancelled' check
+      contains: (_className) => false, // Mock classList for 'vsc-cancelled' check
     },
-    vsc: { div: document.createElement('div'), speedIndicator: { textContent: '1.00' } }
+    vsc: { div: document.createElement('div'), speedIndicator: { textContent: '1.00' } },
   };
   config.addMediaElement(mockVideo);
 
@@ -153,7 +163,7 @@ runner.test('EventManager should handle F-keys correctly', async () => {
   const mockTarget = {
     nodeName: 'DIV',
     isContentEditable: false,
-    getRootNode: () => ({ host: null })  // Mock getRootNode for shadow DOM check
+    getRootNode: () => ({ host: null }), // Mock getRootNode for shadow DOM check
   };
 
   // Trigger F13 key
@@ -161,8 +171,8 @@ runner.test('EventManager should handle F-keys correctly', async () => {
     keyCode: 124,
     target: mockTarget,
     getModifierState: () => false,
-    preventDefault: () => { },
-    stopPropagation: () => { }
+    preventDefault: () => {},
+    stopPropagation: () => {},
   };
 
   eventManager.handleKeydown(f13Event);
@@ -177,7 +187,6 @@ runner.test('Key display names should work for all supported keys', () => {
   // F13-F24 should have aliases
   for (let i = 13; i <= 24; i++) {
     const keyCode = 111 + i; // F13=124, etc.
-    const expectedAlias = `F${i}`;
 
     // This test would fail with the old code but passes with our updates
     const hasAlias = keyCodeAliases[keyCode] !== undefined || keyCode === 124 + (i - 13);
@@ -185,4 +194,4 @@ runner.test('Key display names should work for all supported keys', () => {
   }
 });
 
-export default runner; 
+export default runner;

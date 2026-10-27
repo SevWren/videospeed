@@ -9,7 +9,9 @@ await loadGifModules();
 const runner = new SimpleTestRunner();
 
 runner.test('GifController is exported on window.VSC', () => {
-  if (!window.VSC.GifController) { throw new Error('GifController not found on window.VSC'); }
+  if (!window.VSC.GifController) {
+    throw new Error('GifController not found on window.VSC');
+  }
 });
 
 runner.test('GifController.create is a static async method', () => {
@@ -26,9 +28,14 @@ runner.test('GifController.create returns null when controlGifs is false', async
     getGifElements: () => [],
   };
   const result = await window.VSC.GifController.create(
-    { src: 'test.gif', currentSrc: 'test.gif' }, null, mockConfig, null
+    { src: 'test.gif', currentSrc: 'test.gif' },
+    null,
+    mockConfig,
+    null
   );
-  if (result !== null) { throw new Error('Expected null when controlGifs is false'); }
+  if (result !== null) {
+    throw new Error('Expected null when controlGifs is false');
+  }
 });
 
 runner.test('GifController.create returns null for empty src', async () => {
@@ -39,9 +46,14 @@ runner.test('GifController.create returns null for empty src', async () => {
     getGifElements: () => [],
   };
   const result = await window.VSC.GifController.create(
-    { src: '', currentSrc: '' }, null, mockConfig, null
+    { src: '', currentSrc: '' },
+    null,
+    mockConfig,
+    null
   );
-  if (result !== null) { throw new Error('Expected null for empty src'); }
+  if (result !== null) {
+    throw new Error('Expected null for empty src');
+  }
 });
 
 // ─── file:// bridge path tests ──────────────────────────────────────────────
@@ -55,7 +67,9 @@ runner.test('GifController.create returns null for empty src', async () => {
 function withFakeBridge(behavior, fn) {
   const handler = (event) => {
     const { requestId } = event.detail || {};
-    if (!requestId) return;
+    if (!requestId) {
+      return;
+    }
     behavior(requestId);
   };
   window.addEventListener('VSC_FETCH_GIF_BYTES', handler);
@@ -66,73 +80,96 @@ function withFakeBridge(behavior, fn) {
 
 runner.test('_fetchGifBytes: file:// bridge success returns ArrayBuffer', async () => {
   const buf = new ArrayBuffer(8);
-  const result = await withFakeBridge((requestId) => {
-    setTimeout(() => {
-      window.postMessage(
-        { type: 'VSC_GIF_BYTES_RESPONSE', requestId, success: true, bytes: buf },
-        '*'
-      );
-    }, 0);
-  }, () => window.VSC.GifController._fetchGifBytes('file:///D:/test.gif', null));
+  const result = await withFakeBridge(
+    (requestId) => {
+      setTimeout(() => {
+        window.postMessage(
+          { type: 'VSC_GIF_BYTES_RESPONSE', requestId, success: true, bytes: buf },
+          '*'
+        );
+      }, 0);
+    },
+    () => window.VSC.GifController._fetchGifBytes('file:///D:/test.gif', null)
+  );
   if (!(result instanceof ArrayBuffer) || result.byteLength !== 8) {
     throw new Error(`Expected 8-byte ArrayBuffer, got ${result}`);
   }
 });
 
 runner.test('_fetchGifBytes: file:// bridge blocked returns null', async () => {
-  const result = await withFakeBridge((requestId) => {
-    setTimeout(() => {
-      window.postMessage(
-        { type: 'VSC_GIF_BYTES_RESPONSE', requestId, success: false, error: 'blocked' },
-        '*'
-      );
-    }, 0);
-  }, () => window.VSC.GifController._fetchGifBytes('file:///D:/blocked.gif', null));
-  if (result !== null) throw new Error(`Expected null for blocked, got ${result}`);
+  const result = await withFakeBridge(
+    (requestId) => {
+      setTimeout(() => {
+        window.postMessage(
+          { type: 'VSC_GIF_BYTES_RESPONSE', requestId, success: false, error: 'blocked' },
+          '*'
+        );
+      }, 0);
+    },
+    () => window.VSC.GifController._fetchGifBytes('file:///D:/blocked.gif', null)
+  );
+  if (result !== null) {
+    throw new Error(`Expected null for blocked, got ${result}`);
+  }
 });
 
 runner.test('_fetchGifBytes: file:// bridge timeout returns null', async () => {
-  const result = await withFakeBridge((requestId) => {
-    setTimeout(() => {
-      window.postMessage(
-        { type: 'VSC_GIF_BYTES_RESPONSE', requestId, success: false, error: 'timeout' },
-        '*'
-      );
-    }, 0);
-  }, () => window.VSC.GifController._fetchGifBytes('file:///D:/slow.gif', null));
-  if (result !== null) throw new Error(`Expected null for timeout, got ${result}`);
+  const result = await withFakeBridge(
+    (requestId) => {
+      setTimeout(() => {
+        window.postMessage(
+          { type: 'VSC_GIF_BYTES_RESPONSE', requestId, success: false, error: 'timeout' },
+          '*'
+        );
+      }, 0);
+    },
+    () => window.VSC.GifController._fetchGifBytes('file:///D:/slow.gif', null)
+  );
+  if (result !== null) {
+    throw new Error(`Expected null for timeout, got ${result}`);
+  }
 });
 
 runner.test('_fetchGifBytes: file:// bridge empty bytes returns null', async () => {
-  const result = await withFakeBridge((requestId) => {
-    setTimeout(() => {
-      // success:true but no bytes — treated as failure
-      window.postMessage(
-        { type: 'VSC_GIF_BYTES_RESPONSE', requestId, success: false },
-        '*'
-      );
-    }, 0);
-  }, () => window.VSC.GifController._fetchGifBytes('file:///D:/empty.gif', null));
-  if (result !== null) throw new Error(`Expected null for empty bytes, got ${result}`);
+  const result = await withFakeBridge(
+    (requestId) => {
+      setTimeout(() => {
+        // success:true but no bytes — treated as failure
+        window.postMessage({ type: 'VSC_GIF_BYTES_RESPONSE', requestId, success: false }, '*');
+      }, 0);
+    },
+    () => window.VSC.GifController._fetchGifBytes('file:///D:/empty.gif', null)
+  );
+  if (result !== null) {
+    throw new Error(`Expected null for empty bytes, got ${result}`);
+  }
 });
 
 runner.test('_fetchGifBytes: file:// unrelated postMessage is ignored', async () => {
   // A postMessage with a different requestId must not resolve the promise early.
   const buf = new ArrayBuffer(4);
-  const result = await withFakeBridge((requestId) => {
-    setTimeout(() => {
-      // Wrong requestId first
-      window.postMessage(
-        { type: 'VSC_GIF_BYTES_RESPONSE', requestId: 'other-id', success: true, bytes: new ArrayBuffer(1) },
-        '*'
-      );
-      // Then correct one
-      window.postMessage(
-        { type: 'VSC_GIF_BYTES_RESPONSE', requestId, success: true, bytes: buf },
-        '*'
-      );
-    }, 0);
-  }, () => window.VSC.GifController._fetchGifBytes('file:///D:/test2.gif', null));
+  const result = await withFakeBridge(
+    (requestId) => {
+      setTimeout(() => {
+        // Wrong requestId first
+        window.postMessage(
+          {
+            type: 'VSC_GIF_BYTES_RESPONSE',
+            requestId: 'other-id',
+            success: true,
+            bytes: new ArrayBuffer(1),
+          },
+          '*'
+        );
+        // Then correct one
+        window.postMessage(
+          { type: 'VSC_GIF_BYTES_RESPONSE', requestId, success: true, bytes: buf },
+          '*'
+        );
+      }, 0);
+    },
+    () => window.VSC.GifController._fetchGifBytes('file:///D:/test2.gif', null)
+  );
   if (!(result instanceof ArrayBuffer) || result.byteLength !== 4) {
     throw new Error(`Expected 4-byte ArrayBuffer from correct requestId, got ${result}`);
   }
@@ -150,7 +187,9 @@ runner.test('_fetchGifBytes: https:// URLs still go through fetch (not XHR)', as
   });
   try {
     const result = await window.VSC.GifController._fetchGifBytes('https://example.com/a.gif', null);
-    if (!(result instanceof ArrayBuffer)) throw new Error('Expected ArrayBuffer from fetch path');
+    if (!(result instanceof ArrayBuffer)) {
+      throw new Error('Expected ArrayBuffer from fetch path');
+    }
   } finally {
     global.fetch = origFetch;
   }
@@ -160,11 +199,17 @@ runner.test('origin extraction: file:// origin is null (not the string "null")',
   // Simulate what create() does for a file:// src
   const src = 'file:///D:/test.gif';
   const rawOrigin = new URL(src).origin;
-  if (rawOrigin !== 'null') throw new Error(`Expected string "null" from URL spec, got ${rawOrigin}`);
+  if (rawOrigin !== 'null') {
+    throw new Error(`Expected string "null" from URL spec, got ${rawOrigin}`);
+  }
   const origin = rawOrigin === 'null' ? null : rawOrigin;
-  if (origin !== null) throw new Error(`Expected origin to be null after guard, got ${origin}`);
+  if (origin !== null) {
+    throw new Error(`Expected origin to be null after guard, got ${origin}`);
+  }
   // The guard `if (origin && ...)` must be falsy
-  if (origin) throw new Error('origin must be falsy so the failure cache is never consulted');
+  if (origin) {
+    throw new Error('origin must be falsy so the failure cache is never consulted');
+  }
 });
 
 runner.test('failure cache: one failed file:// GIF does not block others', () => {
@@ -176,10 +221,14 @@ runner.test('failure cache: one failed file:// GIF does not block others', () =>
     cache.set(origin, { permanent: false, until: Date.now() + 60000 });
   }
   // The cache should NOT contain the null key
-  if (cache.has(null)) throw new Error('null origin must not be written to the failure cache');
+  if (cache.has(null)) {
+    throw new Error('null origin must not be written to the failure cache');
+  }
   // A second file:// GIF check also passes
   const secondBlocked = origin && cache && cache.has(origin);
-  if (secondBlocked) throw new Error('Second file:// GIF must not be blocked');
+  if (secondBlocked) {
+    throw new Error('Second file:// GIF must not be blocked');
+  }
 });
 
 export default runner;

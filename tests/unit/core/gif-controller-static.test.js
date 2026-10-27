@@ -54,7 +54,11 @@ function makeImg(src = 'https://example.com/anim.gif') {
 async function withGifuct(override, fn) {
   const orig = window.__VSC_gifuct;
   window.__VSC_gifuct = override;
-  try { return await fn(); } finally { window.__VSC_gifuct = orig; }
+  try {
+    return await fn();
+  } finally {
+    window.__VSC_gifuct = orig;
+  }
 }
 
 /** Stub global.fetch to return a minimal valid GIF ArrayBuffer. */
@@ -67,8 +71,13 @@ function withFakeFetch(fn) {
   });
   const p = fn();
   return p.finally
-    ? p.finally(() => { global.fetch = origFetch; })
-    : (() => { global.fetch = origFetch; return p; })();
+    ? p.finally(() => {
+        global.fetch = origFetch;
+      })
+    : (() => {
+        global.fetch = origFetch;
+        return p;
+      })();
 }
 
 /**
@@ -98,14 +107,14 @@ async function runWithLoggerSpy(gifuct, img, config) {
 
   // Clear any cached fetch-failure entries from prior tests so the fetch
   // mock can actually run and the GIF parsing path is reached.
-  if (window.VSC.gifFetchFailCache) { window.VSC.gifFetchFailCache.clear(); }
+  if (window.VSC.gifFetchFailCache) {
+    window.VSC.gifFetchFailCache.clear();
+  }
 
   let result;
   try {
     result = await withFakeFetch(() =>
-      withGifuct(gifuct, () =>
-        window.VSC.GifController.create(img, null, config, null)
-      )
+      withGifuct(gifuct, () => window.VSC.GifController.create(img, null, config, null))
     );
   } finally {
     window.VSC.logger.error = origError;
@@ -141,16 +150,18 @@ runner.test(
     };
 
     const { loggerErrorCalled, loggerErrorMessage } = await runWithLoggerSpy(
-      gifuct, makeImg(), makeConfig()
+      gifuct,
+      makeImg(),
+      makeConfig()
     );
 
     if (loggerErrorCalled) {
       throw new Error(
         'GifController.create() exited via exception for a 1-frame GIF. ' +
-        'This means the frames guard `frames.length === 0` passed (1 ≠ 0) and ' +
-        'execution continued past the guard into code that threw. ' +
-        'Fix: change the guard to `frames.length <= 1`. ' +
-        `Logger captured: "${loggerErrorMessage}"`
+          'This means the frames guard `frames.length === 0` passed (1 ≠ 0) and ' +
+          'execution continued past the guard into code that threw. ' +
+          'Fix: change the guard to `frames.length <= 1`. ' +
+          `Logger captured: "${loggerErrorMessage}"`
       );
     }
     // Also confirm create() returns null (not a live controller).
@@ -229,15 +240,17 @@ runner.test(
     };
 
     const { loggerErrorCalled, loggerErrorMessage } = await runWithLoggerSpy(
-      gifuct, makeImg(), makeConfig()
+      gifuct,
+      makeImg(),
+      makeConfig()
     );
 
     if (loggerErrorCalled) {
       throw new Error(
         `GifController.create() exited via exception for a ${tinyW}×${MIN + 10} GIF ` +
-        `(width < GIF_MIN_SIZE_PX=${MIN}). ` +
-        `A post-decode dimension guard is missing in gif-controller.js (E-2). ` +
-        `Logger captured: "${loggerErrorMessage}"`
+          `(width < GIF_MIN_SIZE_PX=${MIN}). ` +
+          'A post-decode dimension guard is missing in gif-controller.js (E-2). ' +
+          `Logger captured: "${loggerErrorMessage}"`
       );
     }
   }
@@ -270,15 +283,17 @@ runner.test(
     };
 
     const { loggerErrorCalled, loggerErrorMessage } = await runWithLoggerSpy(
-      gifuct, makeImg(), makeConfig()
+      gifuct,
+      makeImg(),
+      makeConfig()
     );
 
     if (loggerErrorCalled) {
       throw new Error(
         `GifController.create() exited via exception for a ${MIN + 10}×${tinyH} GIF ` +
-        `(height < GIF_MIN_SIZE_PX=${MIN}). ` +
-        `A post-decode dimension guard is missing in gif-controller.js (E-2). ` +
-        `Logger captured: "${loggerErrorMessage}"`
+          `(height < GIF_MIN_SIZE_PX=${MIN}). ` +
+          'A post-decode dimension guard is missing in gif-controller.js (E-2). ' +
+          `Logger captured: "${loggerErrorMessage}"`
       );
     }
   }

@@ -13,7 +13,6 @@ import { SimpleTestRunner, assert } from '../../helpers/test-utils.js';
 import {
   parseInjectorModules,
   parseWARPatterns,
-  expandGlob,
   parseSeamIndexModuleCount,
   checkStructure,
 } from '../../../scripts/check-structure.mjs';
@@ -39,13 +38,13 @@ runner.test('parseInjectorModules: extracts paths from a standard modules array'
 });
 
 runner.test('parseInjectorModules: returns empty array when no modules block found', () => {
-  const src = `function injectScript(src) { return src; }`;
+  const src = 'function injectScript(src) { return src; }';
   const result = parseInjectorModules(src);
   assert.equal(result.length, 0);
 });
 
 runner.test('parseInjectorModules: handles double-quoted paths', () => {
-  const src = `const modules = ["src/utils/logger.js", "src/core/action-handler.js"];`;
+  const src = 'const modules = ["src/utils/logger.js", "src/core/action-handler.js"];';
   const result = parseInjectorModules(src);
   assert.equal(result.length, 2);
   assert.equal(result[0], 'src/utils/logger.js');
@@ -84,13 +83,13 @@ runner.test('parseWARPatterns: throws on invalid JSON', () => {
 // ---------------------------------------------------------------------------
 
 runner.test('parseSeamIndexModuleCount: parses module-count from YAML front matter', () => {
-  const src = `---\nteam: L3\nmodule-count: 25\n---\n\n# SEAM-INDEX\n`;
+  const src = '---\nteam: L3\nmodule-count: 25\n---\n\n# SEAM-INDEX\n';
   const count = parseSeamIndexModuleCount(src);
   assert.equal(count, 25);
 });
 
 runner.test('parseSeamIndexModuleCount: returns null when no module-count field', () => {
-  const src = `---\nteam: L3\n---\n\n# SEAM-INDEX\n`;
+  const src = '---\nteam: L3\n---\n\n# SEAM-INDEX\n';
   const count = parseSeamIndexModuleCount(src);
   assert.equal(count, null);
 });
@@ -118,7 +117,7 @@ const MANIFEST_SRC_OK = JSON.stringify({
 });
 
 runner.test('checkStructure: returns no errors when all modules are consistent', () => {
-  const { errors, warnings } = checkStructure({
+  const { errors } = checkStructure({
     injectorSrc: INJECTOR_SRC_OK,
     manifestSrc: MANIFEST_SRC_OK,
     // Override filesystem checks: all files "exist"
@@ -175,7 +174,7 @@ runner.test('checkStructure: warns when SEAM-INDEX is absent', () => {
 });
 
 runner.test('checkStructure: errors when SEAM-INDEX module-count mismatches injector', () => {
-  const seamIndexWithWrongCount = `---\nmodule-count: 99\n---\n`;
+  const seamIndexWithWrongCount = '---\nmodule-count: 99\n---\n';
   const { errors } = checkStructure({
     injectorSrc: INJECTOR_SRC_OK, // 2 modules
     manifestSrc: MANIFEST_SRC_OK,
@@ -188,7 +187,7 @@ runner.test('checkStructure: errors when SEAM-INDEX module-count mismatches inje
 });
 
 runner.test('checkStructure: errors when parse finds no modules in injector', () => {
-  const emptyInjector = `function injectScript(src) {}`;
+  const emptyInjector = 'function injectScript(src) {}';
   const { errors } = checkStructure({
     injectorSrc: emptyInjector,
     manifestSrc: MANIFEST_SRC_OK,

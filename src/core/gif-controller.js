@@ -121,7 +121,8 @@ if (!window.VSC.GifController) {
         // loopCount = 0 means infinite (Netscape extension convention).
         // When the Netscape extension is absent gifuct returns undefined/null;
         // default to 0 (infinite) to match what every browser does.
-        gc._loopCount = parsed.loopCount == null ? 0 : parsed.loopCount;
+        gc._loopCount =
+          parsed.loopCount === null || parsed.loopCount === undefined ? 0 : parsed.loopCount;
 
         // E-2: Reject GIFs smaller than GIF_MIN_SIZE_PX in either dimension before
         // allocating memory.  1×1 tracking-pixel GIFs (e.g. cleardot.gif) are
@@ -139,7 +140,10 @@ if (!window.VSC.GifController) {
         // "show the background", so starting with the right background avoids
         // those areas appearing as transparent-black.
         const bgIdx = parsed.lsd?.backgroundColorIndex;
-        gc._bgColor = bgIdx != null && parsed.gct && parsed.gct[bgIdx] ? parsed.gct[bgIdx] : null;
+        gc._bgColor =
+          bgIdx !== null && bgIdx !== undefined && parsed.gct && parsed.gct[bgIdx]
+            ? parsed.gct[bgIdx]
+            : null;
 
         // Check per-GIF size limit before allocating (need frame count estimate from parsed)
         // We use parsed.frames.length if available, else defer to after decompressFrames
@@ -365,7 +369,9 @@ if (!window.VSC.GifController) {
             gc._allocatedBytes = 0;
             window.VSC.GifFrameCache?.releaseAllocation(b);
           }
-        } catch (_) {}
+        } catch (_) {
+          // ignore cleanup errors
+        }
         return null;
       }
     }
@@ -392,7 +398,6 @@ if (!window.VSC.GifController) {
         if (src.startsWith('file://')) {
           return new Promise((resolve) => {
             const requestId = `vsc-gif-${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
-            let timeoutHandle;
 
             const messageHandler = (event) => {
               if (
@@ -427,7 +432,7 @@ if (!window.VSC.GifController) {
 
             // 10 s outer timeout: guard against the bridge never responding (e.g.
             // injector.js was not loaded, or the content script world was torn down).
-            timeoutHandle = setTimeout(() => {
+            const timeoutHandle = setTimeout(() => {
               window.removeEventListener('message', messageHandler);
               window.VSC.logger.debug(`Local GIF bridge timed out (no response) for ${src}`);
               resolve(null);

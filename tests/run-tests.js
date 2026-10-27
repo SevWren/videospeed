@@ -5,10 +5,9 @@
  * Usage: node tests/run-tests.js [unit|integration]
  */
 
-import { pathToFileURL } from 'url';
-import { readFileSync, existsSync } from 'fs';
+import { pathToFileURL, fileURLToPath } from 'url';
+import { existsSync } from 'fs';
 import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -28,7 +27,7 @@ try {
 const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
   url: 'http://localhost',
   pretendToBeVisual: true,
-  resources: 'usable'
+  resources: 'usable',
 });
 
 // Mock Chrome APIs first (before setting up DOM globals)
@@ -46,18 +45,18 @@ global.chrome = {
           startHidden: false,
           controllerOpacity: 0.3,
           controllerButtonSize: 14,
-          blacklist: "www.instagram.com\nx.com",
-          logLevel: 3
+          blacklist: 'www.instagram.com\nx.com',
+          logLevel: 3,
         };
         setTimeout(() => callback(mockData), 10);
       },
-      set: (items, callback) => setTimeout(() => callback && callback(), 10)
-    }
+      set: (items, callback) => setTimeout(() => callback && callback(), 10),
+    },
   },
   runtime: {
     getURL: (path) => `chrome-extension://test/${path}`,
-    id: 'test-extension-id'
-  }
+    id: 'test-extension-id',
+  },
 };
 
 // Set up global DOM objects for Node.js environment
@@ -74,7 +73,7 @@ Object.assign(global, {
   CustomEvent: dom.window.CustomEvent,
   MutationObserver: dom.window.MutationObserver,
   requestIdleCallback: (fn) => setTimeout(fn, 0),
-  location: { hostname: 'localhost', href: 'http://localhost' }
+  location: { hostname: 'localhost', href: 'http://localhost' },
 });
 
 // Enhanced shadow DOM support for JSDOM
@@ -109,7 +108,7 @@ if (!global.HTMLElement.prototype.attachShadow) {
         while (tempDiv.firstChild) {
           shadowRoot.appendChild(tempDiv.firstChild);
         }
-      }
+      },
     });
 
     this.shadowRoot = shadowRoot;
@@ -125,22 +124,43 @@ if (dom.window.HTMLCanvasElement) {
       clearRect: () => {},
       fillRect: () => {},
       drawImage: () => {},
-      getImageData: (_x, _y, w, h) => ({ data: new Uint8ClampedArray((w || 1) * (h || 1) * 4), width: w || 1, height: h || 1 }),
+      getImageData: (_x, _y, w, h) => ({
+        data: new Uint8ClampedArray((w || 1) * (h || 1) * 4),
+        width: w || 1,
+        height: h || 1,
+      }),
       canvas: this,
     };
   };
 }
 global.HTMLCanvasElement = dom.window.HTMLCanvasElement;
 if (!global.fetch) {
-  global.fetch = async () => ({ ok: false, status: 0, headers: { get: () => null }, arrayBuffer: async () => new ArrayBuffer(0) });
+  global.fetch = async () => ({
+    ok: false,
+    status: 0,
+    headers: { get: () => null },
+    arrayBuffer: async () => new ArrayBuffer(0),
+  });
 }
 if (!global.requestAnimationFrame) {
   const _rafQueue = [];
-  global.requestAnimationFrame = (fn) => { _rafQueue.push(fn); return _rafQueue.length; };
-  global.cancelAnimationFrame = (id) => { if (id > 0 && id <= _rafQueue.length) _rafQueue[id - 1] = null; };
-  global._drainRaf = (ts = performance.now()) => { const q = _rafQueue.splice(0); q.forEach((fn) => fn && fn(ts)); };
+  global.requestAnimationFrame = (fn) => {
+    _rafQueue.push(fn);
+    return _rafQueue.length;
+  };
+  global.cancelAnimationFrame = (id) => {
+    if (id > 0 && id <= _rafQueue.length) {
+      _rafQueue[id - 1] = null;
+    }
+  };
+  global._drainRaf = (ts = performance.now()) => {
+    const q = _rafQueue.splice(0);
+    q.forEach((fn) => fn && fn(ts));
+  };
 }
-if (!global.performance) { global.performance = dom.window.performance; }
+if (!global.performance) {
+  global.performance = dom.window.performance;
+}
 if (!global.IntersectionObserver) {
   global.IntersectionObserver = class {
     constructor() {}
@@ -182,10 +202,7 @@ async function runTests() {
       'unit/content/injector-relay.test.js',
     ];
   } else if (testType === 'integration') {
-    testFiles = [
-      'integration/module-integration.test.js',
-      'integration/gif-integration.test.js',
-    ];
+    testFiles = ['integration/module-integration.test.js', 'integration/gif-integration.test.js'];
   } else {
     // Run all tests
     testFiles = [
@@ -226,7 +243,7 @@ async function runTests() {
       console.log(`📝 Running ${testFile}...`);
 
       const testModule = await import(pathToFileURL(testPath).href);
-      const runner = Object.values(testModule).find(exp => exp && typeof exp.run === 'function');
+      const runner = Object.values(testModule).find((exp) => exp && typeof exp.run === 'function');
 
       if (runner) {
         const results = await runner.run();
@@ -265,7 +282,7 @@ async function runTests() {
   process.exit(totalFailed > 0 ? 1 : 0);
 }
 
-runTests().catch(error => {
+runTests().catch((error) => {
   console.error('💥 Test runner failed:', error);
   process.exit(1);
 });

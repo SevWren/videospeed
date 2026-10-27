@@ -20,10 +20,10 @@ async function updateIcon(tabId, hasActiveControllers) {
     await chrome.action.setIcon({
       tabId: tabId,
       path: {
-        "19": chrome.runtime.getURL(`src/assets/icons/icon19${suffix}.png`),
-        "38": chrome.runtime.getURL(`src/assets/icons/icon38${suffix}.png`),
-        "48": chrome.runtime.getURL(`src/assets/icons/icon48${suffix}.png`)
-      }
+        19: chrome.runtime.getURL(`src/assets/icons/icon19${suffix}.png`),
+        38: chrome.runtime.getURL(`src/assets/icons/icon38${suffix}.png`),
+        48: chrome.runtime.getURL(`src/assets/icons/icon48${suffix}.png`),
+      },
     });
 
     // Check for chrome.runtime.lastError after the API call
@@ -38,7 +38,9 @@ async function updateIcon(tabId, hasActiveControllers) {
       return;
     }
 
-    console.log(`Icon updated for tab ${tabId}: ${hasActiveControllers ? 'active (red)' : 'inactive (gray)'}`);
+    console.log(
+      `Icon updated for tab ${tabId}: ${hasActiveControllers ? 'active (red)' : 'inactive (gray)'}`
+    );
   } catch (error) {
     console.error('Failed to update icon:', error);
   }
@@ -58,7 +60,9 @@ async function updateTabIndicators(tabId, hasActiveControllers) {
  * Handle controller lifecycle messages from content scripts
  */
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (!sender.tab) return;
+  if (!sender.tab) {
+    return;
+  }
 
   const tabId = sender.tab.id;
 
@@ -88,18 +92,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           tabControllers.delete(tabId);
         }
 
-        console.log(`Controller removed from tab ${tabId}. Remaining: ${tabControllers.get(tabId)?.size || 0}`);
+        console.log(
+          `Controller removed from tab ${tabId}. Remaining: ${tabControllers.get(tabId)?.size || 0}`
+        );
       }
       break;
 
-    case 'VSC_QUERY_ACTIVE_CONTROLLERS':
+    case 'VSC_QUERY_ACTIVE_CONTROLLERS': {
       // Respond with current controller count for this tab
       const controllerCount = tabControllers.get(tabId)?.size || 0;
       sendResponse({
         hasActiveControllers: controllerCount > 0,
-        controllerCount: controllerCount
+        controllerCount: controllerCount,
       });
       return true; // Keep message channel open for async response
+    }
   }
 });
 
@@ -133,8 +140,8 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
   // Explicitly update badge when switching tabs
   try {
-    const hasControllers = tabControllers.has(activeInfo.tabId) &&
-      tabControllers.get(activeInfo.tabId).size > 0;
+    const hasControllers =
+      tabControllers.has(activeInfo.tabId) && tabControllers.get(activeInfo.tabId).size > 0;
 
     // Update the badge for the newly active tab
     await updateTabIndicators(activeInfo.tabId, hasControllers);
@@ -152,10 +159,10 @@ async function setDefaultIconState() {
   try {
     await chrome.action.setIcon({
       path: {
-        "19": chrome.runtime.getURL("src/assets/icons/icon19_disabled.png"),
-        "38": chrome.runtime.getURL("src/assets/icons/icon38_disabled.png"),
-        "48": chrome.runtime.getURL("src/assets/icons/icon48_disabled.png")
-      }
+        19: chrome.runtime.getURL('src/assets/icons/icon19_disabled.png'),
+        38: chrome.runtime.getURL('src/assets/icons/icon38_disabled.png'),
+        48: chrome.runtime.getURL('src/assets/icons/icon48_disabled.png'),
+      },
     });
     console.log('Default icon state set to inactive (gray)');
   } catch (error) {
@@ -189,4 +196,4 @@ chrome.runtime.onInstalled.addListener(async () => {
   await setDefaultIconState();
 });
 
-console.log('Video Speed Controller background script loaded'); 
+console.log('Video Speed Controller background script loaded');

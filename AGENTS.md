@@ -7,6 +7,12 @@ Injects a floating UI into web pages; supports YouTube, Netflix, Amazon, Apple, 
 
 ## Start here
 
+0. **Check for `FORENSIC_REPORT.md`** — Before doing anything else, check if this file exists at the repo root:
+   ```
+   test -f FORENSIC_REPORT.md && echo "EXISTS" || echo "NOT PRESENT"
+   ```
+   - **If it does not exist**: proceed normally.
+   - **If it exists**: read it in full, then immediately inform the user with a plain-English summary of (a) what bugs or issues it documents, (b) which source files are affected, and (c) how those findings relate to the current session's task. Do not proceed with any implementation until the user has been informed. The file is the repo's active investigation log — its presence means there are known defects that may affect your work.
 1. **Read this file** — cold-start entry point for Codex, OpenCode, Claude Code, and any tool
    that auto-loads `AGENTS.md`.
 2. **Read `CLAUDE.md`** — coding style, test commands, commit conventions.

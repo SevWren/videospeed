@@ -104,3 +104,12 @@ _Avoid_: speed display, rate label, speed readout
 **Visibility Pause**:
 An automatic pause applied to a GIF controller when its canvas has been continuously off-screen for 30 or more seconds. Decoded frames are evicted from memory during the pause. The rAF loop resumes and frames are re-decoded from the raw GIF buffer when the canvas re-enters the viewport; if the global memory budget is already exhausted at that point, the GIF remains paused until budget is freed. Distinct from a user-initiated pause.
 _Avoid_: auto-pause, background pause, off-screen pause
+
+## Constants
+
+| Constant | Value | Description |
+|---|---|---|
+| `GIF_GLOBAL_MEMORY_BUDGET_BYTES` | 200 MB | Maximum total decoded-frame memory across all active GIF controllers. |
+| `GIF_FRAME_CACHE_LIMIT_BYTES` | 50 MB | Maximum decoded-frame memory for a single GIF controller. |
+| `GIF_MIN_SIZE_PX` | 20 px | Minimum detected GIF dimension (width or height) required for a GIF to be eligible for canvas replacement. |
+| `GIF_SPEED_SAVE_DEBOUNCE_MS` | 500 ms | Debounce delay before persisting a changed GIF speed to `chrome.storage.sync`. `src/utils/constants.js:118@0922b8c` |

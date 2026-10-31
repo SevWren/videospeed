@@ -44,7 +44,7 @@ class ActionHandler {
       }
     }
 
-    mediaTags.forEach((v, index) => {
+    mediaTags.forEach((v, _index) => {
       const controller = v.vsc?.div;
 
       if (!controller) {

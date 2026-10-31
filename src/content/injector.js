@@ -21,7 +21,9 @@ function injectScript(src) {
 
 // Inject CSS first
 function injectCSS() {
-  if (!document.head) return; // Guard: sandboxed frames may have no head
+  if (!document.head) {
+    return;
+  } // Guard: sandboxed frames may have no head
   const link = document.createElement('link');
   link.rel = 'stylesheet';
   link.type = 'text/css';
@@ -403,7 +405,11 @@ function shouldInjectInCurrentFrame() {
   // 1. Skip non-HTTP frames (about:blank, about:srcdoc, sandboxed frames)
   try {
     const href = window.location.href;
-    if (!href.startsWith('http://') && !href.startsWith('https://') && !href.startsWith('file://')) {
+    if (
+      !href.startsWith('http://') &&
+      !href.startsWith('https://') &&
+      !href.startsWith('file://')
+    ) {
       return false;
     }
   } catch (e) {

@@ -34,7 +34,7 @@ class EventManager {
     const docs = [document];
 
     try {
-      if (window.VSC.inIframe()) {
+      if (window.VSC.DomUtils.inIframe()) {
         docs.push(window.top.document);
       }
     } catch (e) {

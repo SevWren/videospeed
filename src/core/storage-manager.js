@@ -96,8 +96,15 @@ if (!window.VSC.StorageManager) {
     static async set(data) {
       // Check if Chrome APIs are available (content script context)
       if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
           chrome.storage.sync.set(data, () => {
+            if (chrome.runtime.lastError) {
+              window.VSC.logger.warn(
+                `StorageManager.set failed: ${chrome.runtime.lastError.message}`
+              );
+              reject(chrome.runtime.lastError);
+              return;
+            }
             window.VSC.logger.debug('Settings saved to storage');
             resolve();
           });

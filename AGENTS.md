@@ -1,6 +1,6 @@
 # Video Speed Controller — Chrome MV3 extension
 
-Controls HTML5 video/audio playback speed and GIF animation speed via keyboard shortcuts.
+Controls HTML5 video/audio playback speed and GIF animation speed via key bindings.
 Injects a floating UI into web pages; supports YouTube, Netflix, Amazon, Apple, Facebook.
 
 ---
@@ -10,11 +10,13 @@ Injects a floating UI into web pages; supports YouTube, Netflix, Amazon, Apple, 
 1. **Read this file** — cold-start entry point for Codex, OpenCode, Claude Code, and any tool
    that auto-loads `AGENTS.md`.
 2. **Read `CLAUDE.md`** — coding style, test commands, commit conventions.
-3. **Locate your task** via the module map below, then read the relevant module card.
+3. **Read `CONTEXT.md`** — canonical domain vocabulary and constants. Use the terms in this file (not `GLOSSARY.md`) for all names, comments, and PR descriptions.
+4. **Locate your task** via the module map below, then read the relevant module card.
 
 Two worlds at runtime:
 - **Isolated world** (`src/content/injector.js`) — has `chrome.*`, no `window.VSC`
 - **Page main world** (everything else in `src/`) — has `window.VSC`, no `chrome.*`
+- **Service worker** (`src/background.js`) — has `chrome.*`, no `window.VSC`, no page DOM. Communicates via `chrome.runtime.sendMessage` only.
 - Bridge: `window.dispatchEvent(CustomEvent(...))` — 9 named event types (see B-architecture.md)
 
 ---
@@ -22,12 +24,13 @@ Two worlds at runtime:
 ## Key commands
 
 ```
+node scripts/check-structure.mjs && node scripts/check-seams.mjs  # pre-edit gate: run before any src/ change
 npm test                  # unit + integration (JSDOM runner, no Jest CLI)
 npm run test:gif          # GIF-specific integration tests only
 npm run lint              # ESLint check (no auto-fix)
 npm run build             # lint:fix + format + test (full local gate)
-node scripts/gen-repo-map.mjs          # regenerate REPO_MAP.md
-node scripts/gen-repo-map.mjs --check  # exit non-zero if >24 h stale
+npm run map:repo                       # regenerate REPO_MAP.md
+npm run map:repo -- --check            # exit non-zero if >24 h stale
 ```
 
 ---
@@ -39,9 +42,9 @@ Complete file tree with LOC counts and entry point markers:
 
 | Area | Module card | Key files |
 |------|-------------|-----------|
-| Core | `docs/ai_generated/modules/core.md` | gif-controller.js (805), video-controller.js (432), action-handler.js (568) |
-| Content | `docs/ai_generated/modules/content.md` | inject.js (611), injector.js (319), background.js (191) |
-| Observers | `docs/ai_generated/modules/observers.md` | mutation-observer.js (351), media-observer.js (290), gif-observer.js (57) |
+| Core | `docs/ai_generated/modules/core.md` | gif-controller.js (868), video-controller.js (434), action-handler.js (572) |
+| Content | `docs/ai_generated/modules/content.md` | inject.js (681), injector.js (378), background.js (199) |
+| Observers | `docs/ai_generated/modules/observers.md` | mutation-observer.js (358), media-observer.js (294), gif-observer.js (59) |
 | Site handlers | `docs/ai_generated/modules/site-handlers.md` | base-handler.js (96) + 5 per-site handlers |
 | UI | `docs/ai_generated/modules/ui.md` | shadow-dom.js (248), controls.js (131), options/, popup/ |
 | Utils | `docs/ai_generated/modules/utils.md` | event-manager.js (319), debug-helper.js (400), constants.js (121) |
@@ -72,11 +75,19 @@ Key invariants most likely to be accidentally broken:
 ADRs live in `docs/ai_generated/adr/`. Relevant for platform/refactor tasks:
 
 - `0001-window-vsc-global-namespace.md` — why `window.VSC.*` IPC instead of ES imports
-- `0002-shadow-dom-controller-isolation.md` — why Shadow DOM for the overlay
+- `0002-shadow-dom-controller-isolation.md` — why Shadow DOM for the Controller
 - `0003-additive-ai-scaffold.md` — why the scaffold is additive-only (no src/ moves)
 
 Full architecture (worlds, seam crossing points, module dependency graph):
 `docs/ai_generated/structure-initiative/02-architecture/B-architecture.md`
+
+**Open migration tickets** — `docs/ai_generated/structure-initiative/tickets/` contains T01–T08. Before implementing any change in the relevant area, read the ticket:
+- T03: dead `src/module-loader.js` removal (WAR/injector area)
+- T04: `VSC_SAVE_SETTINGS` payload validation (settings/security area)
+- T05: `StorageManager.onChanged` relay (storage/settings area)
+- T06: mutating build gate fix (package.json/CI area)
+- T07: HANDOFF.md structural split (docs area)
+- T08: scaffold test registration (test runner area)
 
 ---
 
@@ -104,8 +115,8 @@ Agent role definitions with pre-conditions live in `.claude/agents/`:
 - **Never modify `src/lib/gifuct-js.min.js`** (vendored GIF decoder — P1).
 - **Never add a `chrome.*` call** inside page main world scripts (`src/core/`, `src/utils/`,
   `src/observers/`, `src/site-handlers/`, `src/ui/`, `src/content/inject.js`).
-- **Never add CustomEvent listeners without origin/source checking** (VSC_SAVE_SETTINGS gap
-  is documented in MT-001; do not replicate the pattern).
+- **Never expand the `VSC_SAVE_SETTINGS` CustomEvent payload with new fields** without payload schema validation — any page script can write arbitrary keys to `chrome.storage.sync` via this event (P14, gap tracked in T04; requires human approval before any fix).
+- **Never add a `postMessage` handler** without validating both `requestId` and message origin (P13 — `VSC_GIF_BYTES_RESPONSE` has a known origin-check gap in MT-001; do not replicate).
 - **Never use ES `import`/`export`** in `src/` files — modules communicate via `window.VSC.*`
   globals (ADR-0001). All src/ files are injected as plain `<script>` tags.
 - **Load order is sacred** — adding a new module to `injector.js` requires placing it after all

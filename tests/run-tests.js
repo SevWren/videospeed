@@ -181,6 +181,7 @@ async function runTests() {
       'unit/core/action-handler-gif.test.js',
       'unit/content/injector-relay.test.js',
       'unit/content/injector-frame-guard.test.js',
+      'unit/content/background-inject.test.js',
     ];
   } else if (testType === 'integration') {
     testFiles = [
@@ -209,6 +210,7 @@ async function runTests() {
       'unit/core/action-handler-gif.test.js',
       'unit/content/injector-relay.test.js',
       'unit/content/injector-frame-guard.test.js',
+      'unit/content/background-inject.test.js',
       'integration/module-integration.test.js',
       'integration/gif-integration.test.js',
     ];

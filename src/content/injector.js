@@ -1,116 +1,40 @@
 /**
- * Content script that injects the main extension code into the page context
- * This solves the Manifest V3 isolated world issue
+ * Content script (isolated world) — bridges chrome.* APIs to the page world.
+ *
+ * WHY THIS APPROACH:
+ * DOM-based script injection (<script src="chrome-extension://...">) is subject
+ * to the page's Content Security Policy. Sites like YouTube block chrome-extension://
+ * URLs in their CSP, causing "Unsafe attempt to load URL" errors on every page load.
+ *
+ * FIX: request module injection from background.js via chrome.runtime.sendMessage.
+ * background.js uses chrome.scripting.executeScript({ world: 'MAIN' }), which
+ * Chrome executes outside the page's CSP entirely.
+ *
+ * CSS is already injected by the manifest.json `css` array — no DOM injection needed.
  */
 
-// Function to inject script into page context
-function injectScript(src) {
-  return new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = chrome.runtime.getURL(src);
-    script.onload = () => {
-      resolve();
-    };
-    script.onerror = () => {
-      console.error(`❌ Failed to inject: ${src}`);
-      reject(new Error(`Failed to inject ${src}`));
-    };
-    (document.head || document.documentElement).appendChild(script);
-  });
-}
-
-// Inject CSS first
-function injectCSS() {
-  if (!document.head) {
-    return;
-  } // Guard: sandboxed frames may have no head
-  const link = document.createElement('link');
-  link.rel = 'stylesheet';
-  link.type = 'text/css';
-  link.href = chrome.runtime.getURL('src/styles/inject.css');
-  document.head.appendChild(link);
-}
-
-// Inject all our modules in order
+// Ask the background service worker to inject all modules into the main world.
+// chrome.scripting.executeScript bypasses the page's CSP (unlike <script src>).
 async function injectModules() {
   try {
-    // Inject CSS first
-    injectCSS();
+    await new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage({ type: 'VSC_INJECT_MAIN_WORLD' }, (response) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+        if (response && response.success) {
+          resolve();
+        } else {
+          reject(new Error(response?.error ?? 'Background injection returned failure'));
+        }
+      });
+    });
 
-    const modules = [
-      'src/utils/constants.js',
-      'src/utils/logger.js',
-      'src/utils/debug-helper.js',
-      'src/utils/dom-utils.js',
-      'src/utils/event-manager.js',
-      'src/core/storage-manager.js',
-      'src/core/settings.js',
-      'src/observers/media-observer.js',
-      'src/observers/mutation-observer.js',
-      'src/core/action-handler.js',
-      'src/core/video-controller.js',
-      'src/ui/controls.js',
-      'src/ui/drag-handler.js',
-      'src/ui/shadow-dom.js',
-      'src/site-handlers/base-handler.js',
-      'src/site-handlers/netflix-handler.js',
-      'src/site-handlers/youtube-handler.js',
-      'src/site-handlers/facebook-handler.js',
-      'src/site-handlers/amazon-handler.js',
-      'src/site-handlers/apple-handler.js',
-      'src/site-handlers/index.js',
-      'src/lib/gifuct-js.min.js',
-      'src/core/gif-frame-engine.js',
-      'src/observers/gif-observer.js',
-      'src/core/gif-controller.js',
-    ];
-
-    // Inject modules with yielding to avoid blocking page load
-    for (let i = 0; i < modules.length; i++) {
-      const module = modules[i];
-      await injectScript(module);
-
-      // Yield control to browser every few modules to avoid blocking
-      if (i > 0 && i % 5 === 0) {
-        await new Promise((resolve) => {
-          if (window.requestIdleCallback) {
-            requestIdleCallback(resolve, { timeout: 50 });
-          } else {
-            setTimeout(resolve, 5);
-          }
-        });
-      }
-    }
-
-    // Inject site-specific scripts if needed
-    await injectSiteSpecificScripts();
-
-    await injectScript('src/content/inject.js');
     await injectUserSettings();
-
-    // Set up message bridge between popup and injected scripts
     setupMessageBridge();
   } catch (error) {
     console.error('💥 Module injection failed:', error);
-  }
-}
-
-// Inject site-specific scripts based on current domain
-async function injectSiteSpecificScripts() {
-  try {
-    // Check current domain and inject appropriate scripts
-    const hostname = location.hostname;
-    if (hostname === 'www.netflix.com') {
-      console.log('🎬 Netflix detected, injecting Netflix script...');
-      await injectScript('src/site-handlers/scripts/netflix.js');
-    }
-
-    // Add other site-specific scripts here as needed
-    // if (hostname === 'www.youtube.com') {
-    //   await injectScript('src/site-handlers/scripts/youtube.js');
-    // }
-  } catch (error) {
-    console.error('❌ Failed to inject site-specific scripts:', error);
   }
 }
 

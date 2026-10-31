@@ -54,6 +54,38 @@ async function updateTabIndicators(tabId, hasActiveControllers) {
   await updateIcon(tabId, hasActiveControllers);
 }
 
+// Ordered list of modules to inject into the page main world.
+// Matches the load order in P11 (AGENTS.md): each module depends only on
+// globals set by earlier entries in this list.
+const MAIN_WORLD_MODULES = [
+  'src/utils/constants.js',
+  'src/utils/logger.js',
+  'src/utils/debug-helper.js',
+  'src/utils/dom-utils.js',
+  'src/utils/event-manager.js',
+  'src/core/storage-manager.js',
+  'src/core/settings.js',
+  'src/observers/media-observer.js',
+  'src/observers/mutation-observer.js',
+  'src/core/action-handler.js',
+  'src/core/video-controller.js',
+  'src/ui/controls.js',
+  'src/ui/drag-handler.js',
+  'src/ui/shadow-dom.js',
+  'src/site-handlers/base-handler.js',
+  'src/site-handlers/netflix-handler.js',
+  'src/site-handlers/youtube-handler.js',
+  'src/site-handlers/facebook-handler.js',
+  'src/site-handlers/amazon-handler.js',
+  'src/site-handlers/apple-handler.js',
+  'src/site-handlers/index.js',
+  'src/lib/gifuct-js.min.js',
+  'src/core/gif-frame-engine.js',
+  'src/observers/gif-observer.js',
+  'src/core/gif-controller.js',
+  'src/content/inject.js',
+];
+
 /**
  * Handle controller lifecycle messages from content scripts
  */
@@ -63,6 +95,37 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const tabId = sender.tab.id;
 
   switch (message.type) {
+    case 'VSC_INJECT_MAIN_WORLD': {
+      // Inject all VSC modules into the page main world using chrome.scripting.
+      // This bypasses the page's Content Security Policy — unlike <script src>
+      // DOM injection which is blocked by strict CSPs (e.g. YouTube).
+      const frameId = sender.frameId ?? 0;
+      const tabUrl = sender.tab.url ?? '';
+
+      const files = [...MAIN_WORLD_MODULES];
+
+      // Site-specific additions
+      if (tabUrl.includes('www.netflix.com')) {
+        // Insert Netflix script before inject.js (second-to-last position)
+        files.splice(files.length - 1, 0, 'src/site-handlers/scripts/netflix.js');
+      }
+
+      chrome.scripting
+        .executeScript({
+          target: { tabId, frameIds: [frameId] },
+          world: 'MAIN',
+          files,
+        })
+        .then(() => {
+          sendResponse({ success: true });
+        })
+        .catch((err) => {
+          console.error('VSC_INJECT_MAIN_WORLD failed:', err.message);
+          sendResponse({ success: false, error: err.message });
+        });
+      return true; // Keep message channel open for async response
+    }
+
     case 'VSC_CONTROLLER_CREATED':
       // Track controller creation
       if (!tabControllers.has(tabId)) {

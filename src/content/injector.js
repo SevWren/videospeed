@@ -21,6 +21,7 @@ function injectScript(src) {
 
 // Inject CSS first
 function injectCSS() {
+  if (!document.head) return; // Guard: sandboxed frames may have no head
   const link = document.createElement('link');
   link.rel = 'stylesheet';
   link.type = 'text/css';
@@ -392,30 +393,55 @@ async function injectUserSettings() {
   }
 }
 
-// Start injection when DOM is ready
-if (document.readyState === 'loading') {
-  // Wait for DOMContentLoaded, then defer injection to avoid blocking page load
-  document.addEventListener('DOMContentLoaded', () => {
-    // Use requestIdleCallback to wait for browser to be less busy
-    if (window.requestIdleCallback) {
-      requestIdleCallback(injectModules, { timeout: 3000 });
-    } else {
-      // Fallback with short delay to let page finish initial rendering
-      setTimeout(injectModules, 100);
-    }
-  });
-} else if (document.readyState === 'interactive') {
-  // Document is still loading, wait a bit more
-  if (window.requestIdleCallback) {
-    requestIdleCallback(injectModules, { timeout: 2000 });
-  } else {
-    setTimeout(injectModules, 50);
+function shouldInjectInCurrentFrame() {
+  // Top-level document: always inject
+  if (window.self === window.top) {
+    return true;
   }
-} else {
-  // Document is complete, but still defer to avoid interfering with other scripts
-  if (window.requestIdleCallback) {
-    requestIdleCallback(injectModules, { timeout: 1000 });
+
+  // Sub-frame checks:
+  // 1. Skip non-HTTP frames (about:blank, about:srcdoc, sandboxed frames)
+  try {
+    const href = window.location.href;
+    if (!href.startsWith('http://') && !href.startsWith('https://') && !href.startsWith('file://')) {
+      return false;
+    }
+  } catch (e) {
+    return false; // Can't read location → skip
+  }
+
+  // 2. Skip same-origin sub-frames (YouTube's player iframe within youtube.com).
+  //    The top-level injector already controls those DOM elements.
+  //    Cross-origin sub-frames (embedded YouTube on another site) get a SecurityError → inject.
+  try {
+    void window.parent.document; // Throws SecurityError for cross-origin parents
+    return false; // Same-origin parent → skip
+  } catch (e) {
+    return true; // Cross-origin parent → inject (embedded player on another site)
+  }
+}
+
+// Start injection when DOM is ready — only in frames that can host the extension
+if (shouldInjectInCurrentFrame()) {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      if (window.requestIdleCallback) {
+        requestIdleCallback(injectModules, { timeout: 3000 });
+      } else {
+        setTimeout(injectModules, 100);
+      }
+    });
+  } else if (document.readyState === 'interactive') {
+    if (window.requestIdleCallback) {
+      requestIdleCallback(injectModules, { timeout: 2000 });
+    } else {
+      setTimeout(injectModules, 50);
+    }
   } else {
-    setTimeout(injectModules, 10);
+    if (window.requestIdleCallback) {
+      requestIdleCallback(injectModules, { timeout: 1000 });
+    } else {
+      setTimeout(injectModules, 10);
+    }
   }
 }

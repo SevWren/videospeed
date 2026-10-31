@@ -1,133 +1,164 @@
 # Contributing
 
-Video Speed Controller is an open source project licensed under the MIT license
-with many contributors. Contributions are welcome, and greatly appreciated.
+Video Speed Controller is an open source Chrome WebExtension (MV3) licensed under the MIT license. Contributions are welcome.
 
-If you would like to help, getting started is easy.
+## Get started
 
-## Get Started
-
-1. You must have a github account and be logged in
-2. Open https://github.com/igrigorik/videospeed/
-3. Fork the repo by clicking the "Fork" link on the top-right corner of the page
-4. Once the fork is ready, clone to your local PC
-
+1. Fork this repo and clone your fork
+2. Create a branch from `main-copy` (the active development branch):
    ```sh
-   $ git clone https://github.com/<USERNAME>/videospeed.git
-   Cloning into 'videospeed'...
-    remote: Enumerating objects: 10, done.
-    remote: Counting objects: 100% (10/10), done.
-    remote: Compressing objects: 100% (9/9), done.
-    remote: Total 877 (delta 3), reused 2 (delta 1), pack-reused 867
-    Receiving objects: 100% (877/877), 317.65 KiB | 2.17 MiB/s, done.
-    Resolving deltas: (543/543), done.
+   git checkout -b fix/123-describe-your-change
    ```
+3. Read `AGENTS.md` — it is the cold-start entry point for this repo and covers the two-world architecture, protected behaviors, and coding standards
+4. Make your changes
+5. Run the validation gate before pushing (see below)
+6. Open a pull request and fill out the PR template
 
-5. Create a branch for your changes
+## Required reading before you change `src/`
 
-   ```sh
-    $ cd videospeed
-    videospeed$ git checkout -b bugfix/1-fix-double-click
-    M   .github/workflows/chrome-store-upload.yaml
-    M   README.md
-    M   options.js
-    Switched to a new branch 'bugfix/1-fix-double-click'
-    videospeed$
-   ```
+| File | Why |
+|---|---|
+| `CLAUDE.md` | Build commands, coding style, test conventions |
+| `CONTEXT.md` | Canonical vocabulary — use these terms in all names, comments, and PR descriptions |
+| `docs/ai_generated/protected-behaviors/registry.md` | 14 behaviors that must not break — check every row that covers a file you touched |
 
-6. Open the code in your favorite code editor, make your changes
+Also check: if `FORENSIC_REPORT.md` exists at the repo root, read it before touching any `src/` file. It documents known defects with exact code locations.
 
-   ```sh
-   echo "Awesome changes" > somefile.js
-   git add .
-   ```
+## Validation gate
 
-   > Important: Your commit must be formatted using
-   > [prettier](https://prettier.io/). If it is not it may be autoformatted for
-   > you or your pull request may be rejected.
+Run this before every PR:
 
-7. Next, open Chrome/Brave/Chromium and enable developer mode via
-   `Settings > Extensions > Manage Extensions` and toggle `Developer mode` in
-   the top-right corner.
-8. Click `Load unpacked` and browse to the folder you cloned videospeed to.
+```sh
+npm run build
+```
 
-   > Note: Before loading the extension, make sure `src/lib/gifuct-js.min.js`
-   > is present in the repo. This file is the vendored GIF frame decoder and is
-   > injected as a plain script at runtime — if it is absent, GIF decoding
-   > silently fails. It is committed to the repo, so a normal `git clone` will
-   > include it automatically.
+This runs lint (with auto-fix), Prettier formatting, and the full unit + integration test suite.
 
-9. Try out your changes, make sure they work as expected
-10. Commit and push your changes to github
+**Also required in specific cases:**
 
-   ```sh
-   git commit -m "Awesome description of some awesome changes."
-   git push
-   ```
+```sh
+# When touching src/core/gif-controller.js, src/core/gif-frame-engine.js,
+# or src/observers/gif-observer.js:
+npm run test:gif
 
-11. Open your branch up on the github website then click `New pull request` and
-    write up a description of your changes.
+# When changing popup, options page, or Controller overlay UI:
+npm run test:e2e
+```
 
-## Optional
+**Pre-edit structure check** — run before any `src/` change:
 
-### Run Pre-Commit Checks Locally
+```sh
+node scripts/check-structure.mjs && node scripts/check-seams.mjs
+```
 
-Installing [pre-commit](https://pre-commit.com/) is easy to do (click the link
-for instructions on your platform). This repo comes with pre-commit already
-configured. Doing this will ensure that your project is properly formatted and
-runs some very basic tests. Once you have pre-commit installed on your system,
-simply enter `pre-commit install` in your terminal in the folder to have these
-checks run automatically each time you commit.
+## Manual browser verification
 
-Even better, after issueing the install command you can now manually run
-pre-commit checks before committing via `pre-commit run --all-files`
+Load the extension unpacked in Chrome/Chromium before opening a PR for any change that affects observable browser behavior:
 
-### Testing
+1. `Settings > Extensions > Manage Extensions` — enable Developer mode
+2. Click **Load unpacked** and select the repo root folder
+3. Confirm `src/lib/gifuct-js.min.js` is present — if absent, GIF decoding silently fails
 
-Run the full test suite with:
+Manual verification is required for changes to the Controller overlay, popup, options page, Key Bindings behavior, or GIF speed control. It is not required for pure logic changes fully covered by unit tests.
+
+## PR standards
+
+Fill out the PR template completely. The template enforces:
+
+- Which test commands were run
+- Which protected behaviors (P1–P14) were checked, grouped by file area
+- Test quality: independent expected values, red-before-green evidence, seam discipline
+- Domain vocabulary from `CONTEXT.md`
+- No changes to `src/lib/`
+- Security gates for P13 and P14
+- Documentation update triggers
+
+### Issue requirements
+
+**Bug fixes** — reference or create a GitHub issue before opening the PR. Minimum issue content: title, one-sentence description of the bug, affected file and function.
+
+**Feature additions** (new capability, new Site Handler, new Action, new persisted setting) — create a GitHub issue and wait for human acknowledgment before writing any implementation code. The issue must describe what the feature does, why it is needed, which files will be touched, and any compatibility constraints.
+
+**Refactors, docs, and test-only changes** — reference or create a minimal issue; no acknowledgment wait required.
+
+### Handoff content
+
+Do not commit a `HANDOFF.md` file. Session context and handoff information belongs in the PR description body, not a committed file.
+
+## Testing
+
+Run the full suite:
 
 ```sh
 npm test
 ```
 
-If you are touching any GIF-related files (`src/core/gif-controller.js`,
-`src/core/gif-frame-engine.js`, or `src/observers/gif-observer.js`), also run
-the GIF-specific integration tests:
+GIF-specific integration tests (required when touching GIF files):
 
 ```sh
 npm run test:gif
 ```
 
-This exercises GIF decoding and playback speed scenarios that are not covered
-by the general suite.
+### Manual GIF testing
 
-#### Manual Testing — GIF Speed Control
+To verify GIF speed control end-to-end:
 
-To manually verify GIF speed control end-to-end:
-
-1. Load a GIF-heavy page such as [giphy.com](https://giphy.com),
-   [tenor.com](https://tenor.com), or [reddit.com](https://reddit.com).
-2. The extension replaces `<img>` GIF elements with `<canvas>` elements —
-   confirm that the speed overlay appears over GIFs on the page.
-3. Use the following controls on a GIF overlay:
+1. Load a GIF-heavy page (giphy.com, tenor.com, reddit.com)
+2. The extension replaces `<img>` GIF elements with `<canvas>` elements — confirm the speed overlay appears
+3. Test controls on a GIF overlay:
    - **Z** — slower
    - **C** — faster
-   - **S** — reset to normal speed
-   - **Mouse wheel** on the overlay — adjust speed up or down
-4. Note: the rewind/advance shortcuts (**E / W / R / T**) are video-only and
-   have no effect on GIFs.
-5. Known limitations:
-   - `blob:` URL GIFs are intentionally excluded.
-   - GIFs served as MP4 (e.g. Imgur redirects) are intentionally excluded.
-6. To disable GIF control for a session without blacklisting the entire site,
-   turn off `controlGifs` in the extension options page.
+   - **S** — reset to 1.0x
+   - **Mouse wheel** on overlay — adjust speed
+4. Note: the seek Key Bindings (**E / W / R / T**) are video-only and have no effect on GIFs
+5. Known intentional exclusions (out of scope — do not file bugs):
+   - `blob:` URL GIFs
+   - GIFs served as MP4 (e.g., Imgur redirects)
+   - SVG `<image>` elements
+6. To disable GIF control for a session, turn off `controlGifs` in the extension options page
 
-### Pull Upstream Changes
+### Test quality requirements
 
-You should always be working with the latest version of the tool to make pull
-requests easy. If you want to do this easily, just add a second remote to your
-local git repo like this
-`git remote add upstream https://github.com/igrigorik/videospeed.git`
+Tests must satisfy all three of these before a PR can be opened:
 
-Now any time you like to pull the latest version in to your local branch you can
-simply issue the command `git pull upstream master`
+1. **Independent expected values** — assert against known-good literals, not values computed the same way as the implementation
+2. **Red-before-green** — at least one test must fail without the code change
+3. **Seam discipline** — test at the module's public interface, not against private methods or internal state
+
+If a surface is untestable in JSDOM (e.g., P7 canvas pixel compositing, P13 origin validation), declare it explicitly in the PR and cite the entry in `docs/ai_generated/protected-behaviors/registry.md` or `docs/ai_generated/structure-initiative/06-tests/E-tests.md`.
+
+## Coding standards
+
+Full standards are in `.claude/rules/coding-standards.md`. Key rules:
+
+- No ES `import`/`export` in `src/` — modules communicate via `window.VSC.*` globals (ADR-0001)
+- Never call `chrome.*` from page main world files (`src/core/`, `src/observers/`, `src/ui/`, `src/site-handlers/`, `src/utils/`, `src/content/inject.js`)
+- Never modify `src/lib/gifuct-js.min.js` — it is vendored and untouchable without thorough real-Chrome testing (P1)
+- Use `CONTEXT.md` vocabulary in all names, comments, and PR descriptions
+
+## Commit format
+
+Favor concise, imperative commits with prefixes: `fix:`, `feat:`, `chore:`, `docs:`, `test:`, or short action phrases.
+
+## Pre-commit hooks
+
+Install [pre-commit](https://pre-commit.com/) to run formatting and basic checks automatically on every commit:
+
+```sh
+pre-commit install
+```
+
+Run manually at any time:
+
+```sh
+pre-commit run --all-files
+```
+
+## Scope boundaries (wontfix)
+
+The following are intentionally out of scope. Do not open PRs implementing them without first opening an issue and receiving explicit acknowledgment:
+
+- `blob:` URL GIF support
+- SVG `<image>` element speed control
+- GIFs served as MP4 (Imgur-style redirects)
+- Firefox / non-Chromium browser support (no MV3→MV2 shim exists)

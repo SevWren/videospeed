@@ -47,6 +47,8 @@ AI-generated docs live under `docs/ai_generated/`.
 
 ## Coding Style & Naming Conventions
 
+@.claude/rules/coding-standards.md
+
 - ES modules with 2-space indentation
 - Prettier: single quotes, semicolons, trailing commas (`es5`), max line width `100`
 - ESLint enforces: `prefer-const`, `no-var`, `eqeqeq`, `curly`, single quotes, `no-eval`, `prefer-template`, `prefer-arrow-callback`
@@ -84,4 +86,4 @@ Default canonical labels: `needs-triage`, `needs-info`, `ready-for-agent`, `read
 
 ### Domain docs
 
-Single-context repo: `GLOSSARY.md` at root, ADRs in `docs/adr/`. See `docs/agents/domain.md`.
+Single-context repo: `CONTEXT.md` at root (authoritative; `GLOSSARY.md` is a subset), ADRs in `docs/adr/`. See `docs/agents/domain.md`.

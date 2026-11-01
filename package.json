@@ -14,7 +14,7 @@
     "lint": "eslint src/**/*.js tests/**/*.js",
     "lint:fix": "eslint src/**/*.js tests/**/*.js --fix",
     "format": "prettier --write src/**/*.js tests/**/*.js",
-    "build": "npm run lint:fix && npm run format && npm run test",
+    "build": "npm run check:manifest && npm run lint:fix && npm run format && npm run test",
     "check:manifest": "node scripts/check-manifest.js",
     "zip": "rm -rf dist && mkdir -p dist/videospeed && cp -r manifest.json src dist/videospeed/ && cp README.md PRIVACY.md CONTRIBUTING.md dist/videospeed/ && cd dist && zip -r videospeed.zip videospeed && cd .. && echo 'Extension packaged at dist/videospeed.zip'"
   },

@@ -257,37 +257,43 @@ runner.test(
 );
 
 /**
- * RED test: attempting to configure the null-head precondition by assigning
- * `document.head = null` on the global JSDOM document must not throw.
+ * Verifies the null-head guard in constants.js using a document surrogate
+ * where head is null.
  *
- * Currently RED because JSDOM's document.head is a read-only getter (per the
- * DOM spec).  The direct assignment throws:
- *   TypeError: Cannot set property head of #<Document> which has only a getter
+ * The guard `if (document.head)` on line 14 must prevent a TypeError when
+ * constants.js executes in a sub-frame where document.head is null.
  *
- * This test documents the precondition-setup failure that would block any test
- * which tries to exercise the null-head path against the live global document.
- * It is a signal that null-head testing requires a document surrogate (as used
- * in the test above), and that the guard in constants.js must be verified via
- * the evalConstantsSource path, not by patching the global.
+ * Note: JSDOM's document.head is a read-only getter per the DOM spec, so
+ * null-head testing requires a document surrogate rather than patching the
+ * global document.  The surrogate approach is already used by all other tests
+ * in this file and is the correct seam for this precondition.
  *
- * After the fix is applied this test remains RED (JSDOM's read-only constraint
- * does not change) — it is a permanent documentation of the environmental
- * limitation, not a test that becomes GREEN after the constants.js fix.
- * Mark it as an expected-failure by asserting the throw itself.
+ * This test goes RED if the guard is removed and GREEN when it is present.
  */
-// [Finding 9] JSDOM document.head is read-only — null-head precondition cannot
-// be set on global document (DOM spec getter-only).
-//
-// JSDOM's document.head is a read-only getter per the DOM spec.  Attempting
-// `global.document.head = null` either throws a TypeError in strict mode or is
-// silently ignored — the value is never actually set to null.  Any test that
-// requires a null-head precondition MUST use a document surrogate (as the
-// tests above do) rather than patching the global document.
-//
-// This limitation is documented here; the test is skipped rather than kept as
-// an intentional always-failing assertion to avoid breaking CI.
-runner.skip(
-  '[Finding 9] JSDOM document.head is read-only — null-head precondition cannot be set on global document (DOM spec getter-only — use document surrogate instead)',
+runner.test(
+  '[Finding 9] constants.js must not throw when document.head is null (sub-frame safety)',
+  () => {
+    const windowSurrogate = {};
+    // Surrogate with head explicitly null — simulates a sub-frame document
+    const documentSurrogate = {
+      head: null,
+      createElement: (tag) => ({ id: '', style: {}, textContent: '', tag }),
+    };
+
+    const thrownError = evalConstantsSource(windowSurrogate, documentSurrogate);
+
+    assert.equal(
+      thrownError,
+      null,
+      `constants.js must not throw when document.head is null, got: ${thrownError}`,
+    );
+
+    // Constants must still be fully initialised despite the null head
+    assert.exists(
+      windowSurrogate.VSC.Constants.DEFAULT_SETTINGS,
+      'DEFAULT_SETTINGS must be defined even when document.head is null',
+    );
+  },
 );
 
 // ---------------------------------------------------------------------------

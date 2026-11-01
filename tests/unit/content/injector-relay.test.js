@@ -180,7 +180,9 @@ runner.test('Fix D: injector.js registers exactly one chrome.storage.onChanged l
 });
 
 runner.test('non-sync area produces no relay dispatch', () => {
-  // Simulate the areaName guard in the injector.js listener
+  installChromeMock();
+  resetMockStorage();
+
   let dispatched = false;
   const origDispatch = window.dispatchEvent.bind(window);
   window.dispatchEvent = (event) => {
@@ -188,16 +190,26 @@ runner.test('non-sync area produces no relay dispatch', () => {
     return origDispatch(event);
   };
 
-  // Simulate: areaName !== 'sync' → early return; patch never dispatched
-  const areaName = 'local';
-  if (areaName === 'sync') {
-    const patch = buildRelayPatch({ keyBindings: { newValue: [] } });
+  // Register a listener that mirrors the full production relay body from
+  // injector.js::setupMessageBridge(). CS-3 exception applies: injector.js is
+  // a content script that cannot be loaded as an ES module in JSDOM.
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== 'sync') return;
+    const patch = buildRelayPatch(changes);
     if (Object.keys(patch).length > 0) {
       window.dispatchEvent(new CustomEvent('VSC_USER_SETTINGS', { detail: patch }));
     }
-  }
+  });
+
+  // Fire with a non-sync area — the guard must suppress dispatch.
+  chrome.storage.onChanged.triggerStorageChange(
+    { keyBindings: { newValue: [] } },
+    'local'
+  );
 
   window.dispatchEvent = origDispatch;
+  cleanupChromeMock();
+
   assert.equal(dispatched, false, 'VSC_USER_SETTINGS must not be dispatched for non-sync area');
 });
 

@@ -100,18 +100,22 @@ runner.test('all world:MAIN content_scripts blocks declare run_at:"document_end"
   }
 });
 
-runner.test('Block 0 (injector.js / ISOLATED world) has match_about_blank:false', () => {
+runner.test('ISOLATED-world injector block (injector.js) has match_about_blank:false', () => {
   const contentScripts = manifest.content_scripts ?? [];
-  const block0 = contentScripts[0];
+  // Identify the ISOLATED-world injector block by content, not position:
+  // it is the block that injects injector.js and does NOT declare world:"MAIN".
+  const injectorBlock = contentScripts.find(
+    (cs) => cs.world !== 'MAIN' && (cs.js ?? []).includes('src/content/injector.js')
+  );
   assert.true(
-    block0 !== undefined,
-    'content_scripts[0] does not exist'
+    injectorBlock !== undefined,
+    'no ISOLATED-world content_scripts block containing src/content/injector.js found'
   );
   assert.equal(
-    block0.match_about_blank,
+    injectorBlock.match_about_blank,
     false,
-    'content_scripts[0] (injector.js / ISOLATED world) must set match_about_blank:false ' +
-      'to prevent injection into YouTube sandboxed about:blank iframes (currently true, causes console errors)'
+    'ISOLATED-world injector block must set match_about_blank:false ' +
+      'to prevent injection into YouTube sandboxed about:blank iframes (causes console errors)'
   );
 });
 

@@ -5,21 +5,30 @@
  * the Path B (world:MAIN content_scripts) architecture and should not appear
  * in web_accessible_resources.
  *
- * Test 1 (GREEN — regression guard):
+ * RED before Path B cleanup:
+ *   - src/module-loader.js was listed explicitly in web_accessible_resources,
+ *     making it fetchable from the page via chrome.runtime.getURL() despite
+ *     nothing calling loadModule() or defineModule() under Path B.
+ *   - src/module-loader.js may also have appeared in a content_scripts js
+ *     array as a legacy entry from the old module-loading architecture.
+ *
+ * GREEN after Path B cleanup:
+ *   - module-loader.js is absent from all content_scripts js arrays.
+ *   - module-loader.js is absent from web_accessible_resources as an explicit
+ *     entry, AND no glob pattern in web_accessible_resources covers
+ *     src/module-loader.js (e.g., a hypothetical src/*.js glob would expose
+ *     it even without an explicit listing).
+ *
+ * Test 1 (regression guard):
  *   module-loader.js is absent from every content_scripts js array (both
  *   ISOLATED and MAIN world blocks). It was never injected by the browser, so
  *   its window.loadModule / window.defineModule globals are never created.
  *
- * Test 2 (GREEN — regression guard):
- *   module-loader.js is absent from web_accessible_resources. Listing it there
- *   would make it fetchable from the page via chrome.runtime.getURL(), which is
- *   unnecessary attack surface for a file that nothing calls. This test guards
- *   against the entry being re-introduced.
- *
- * Test 3 (GREEN — regression guard):
- *   None of the files actually injected by content_scripts call loadModule()
- *   or defineModule(). This proves the file is unreachable: even if it were
- *   somehow loaded, nothing in the injected surface invokes it.
+ * Test 2 (regression guard):
+ *   module-loader.js is not reachable via web_accessible_resources — neither
+ *   as an explicit path nor as a file matched by any declared glob pattern.
+ *   Listing it (directly or via glob) would make it fetchable from the page
+ *   via chrome.runtime.getURL(), which is unnecessary attack surface.
  */
 
 import { readFileSync } from 'fs';
@@ -52,54 +61,39 @@ runner.test(
 );
 
 // ---------------------------------------------------------------------------
-// Test 2 — module-loader.js must NOT be in web_accessible_resources (RED now)
+// Test 2 — module-loader.js is unreachable via web_accessible_resources:
+//           neither as an explicit path nor via any declared glob pattern
 // ---------------------------------------------------------------------------
 runner.test(
-  'module-loader.js is absent from web_accessible_resources (regression guard)',
+  'module-loader.js is not reachable via web_accessible_resources (explicit or glob)',
   () => {
     const war = manifest.web_accessible_resources ?? [];
     const allResources = war.flatMap((entry) => entry.resources ?? []);
 
-    const found = allResources.some((r) => r === 'src/module-loader.js');
-
-    assert.false(
-      found,
-      `src/module-loader.js must not be listed in web_accessible_resources — ` +
+    // Check 2a: no explicit listing
+    const explicitMatch = allResources.find((r) => r === 'src/module-loader.js');
+    assert.equal(
+      explicitMatch,
+      undefined,
+      `src/module-loader.js must not be listed explicitly in web_accessible_resources — ` +
         `it is dead code under Path B and its presence widens the extension attack surface unnecessarily`
     );
-  }
-);
 
-// ---------------------------------------------------------------------------
-// Test 3 — no injected file calls loadModule() or defineModule()
-// ---------------------------------------------------------------------------
-runner.test(
-  'no content_scripts file calls loadModule() or defineModule() — module-loader.js is unreachable',
-  () => {
-    const contentScripts = manifest.content_scripts ?? [];
-    const allInjectedFiles = contentScripts.flatMap((cs) => cs.js ?? []);
-
-    const callers = [];
-
-    for (const relPath of allInjectedFiles) {
-      const absPath = join(repoRoot, relPath);
-      let source;
-      try {
-        source = readFileSync(absPath, 'utf8');
-      } catch {
-        // File missing — not a call-site concern; other tests cover missing files
-        continue;
-      }
-
-      if (/loadModule\s*\(|defineModule\s*\(/.test(source)) {
-        callers.push(relPath);
-      }
-    }
-
-    assert.true(
-      callers.length === 0,
-      `loadModule() or defineModule() was found in injected file(s): ${callers.join(', ')} — ` +
-        `these functions are only defined in module-loader.js, which is not injected under Path B`
+    // Check 2b: no glob pattern covers src/module-loader.js.
+    // The only glob patterns that could match it would be rooted at src/ with
+    // a wildcard that reaches the top-level src/ directory (e.g., "src/*.js").
+    // Patterns rooted in subdirectories (src/core/*.js, src/content/*.js, etc.)
+    // cannot match a file directly under src/.
+    const globsThatCoverSrcRoot = allResources.filter((r) => {
+      // Match patterns of the form src/*.js or src/* (not src/subdir/...)
+      return /^src\/\*/.test(r);
+    });
+    assert.equal(
+      globsThatCoverSrcRoot.length,
+      0,
+      `web_accessible_resources must not contain a glob pattern rooted at src/ ` +
+        `(e.g., "src/*.js") — such a pattern would expose src/module-loader.js ` +
+        `to page scripts even without an explicit listing. Found: ${JSON.stringify(globsThatCoverSrcRoot)}`
     );
   }
 );

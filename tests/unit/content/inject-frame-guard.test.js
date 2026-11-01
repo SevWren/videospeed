@@ -1,62 +1,42 @@
 /**
- * Frame guard tests for inject.js (Gap 3)
+ * Frame guard tests for inject.js
  *
- * TDD red/green status against CURRENT unpatched code:
- *   Test 1  [GREEN] — DomUtils.inIframe() contract (top-frame returns false)
- *   Test 1b [GREEN] — DomUtils.inIframe() contract (sub-frame returns true)
- *   Test 2  [RED]   — inject.js must NOT initialize() in an iframe — FAILS because
- *                     no frame guard exists; line 660 always calls extension.initialize()
- *                     unconditionally. The test asserts that shouldInjectInCurrentFrame()
- *                     must be exposed on window.VSC._shouldInjectInCurrentFrame, which
- *                     does not exist yet.
- *   Test 3  [GREEN] — inject.js MUST initialize() in top frame — passes because
- *                     current code always calls extension.initialize().
+ * Seams under test:
+ *   S1. window.VSC.DomUtils.inIframe() — public utility; tested for its own contract.
+ *   S2. window.VSC._shouldInjectInCurrentFrame() — the agreed test-only export of the
+ *       frame-guard function from inject.js. Tests verify its *behavior* (return values
+ *       for controlled browser-context conditions), not its existence or internal wiring.
  *
- * All four tests will be GREEN after shouldInjectInCurrentFrame() is added to
- * inject.js per the fix specified in T1-A3 Phase 5.
+ * Environment control:
+ *   window.top is non-configurable in JSDOM, so we patch window.self (which IS
+ *   configurable) to an object !== window.top in order to simulate a sub-frame.
+ *   window.parent.document is accessible in JSDOM (same-origin by definition), so the
+ *   guard's same-origin branch is exercised naturally without any mock.
  *
- * Seams:
- *   S1. window.VSC.DomUtils.inIframe() — public utility, tested directly
- *   S2. VideoSpeedExtension.initialize() invocation — must be gated by frame guard
+ * No internal collaborators (DomUtils, etc.) are stubbed — conditions are set
+ * through the browser environment properties the production code actually reads.
  */
 
-import {
-  installChromeMock,
-  cleanupChromeMock,
-  resetMockStorage,
-} from '../../helpers/chrome-mock.js';
 import { SimpleTestRunner, assert } from '../../helpers/test-utils.js';
 import { loadCoreModules } from '../../helpers/module-loader.js';
 
-// Load core modules so window.VSC.DomUtils is available.
-// We do NOT re-import inject.js: it is already in the ES module cache from
-// inject.test.js (loaded earlier via loadInjectModules()). window.VideoSpeedExtension
-// and window.videoSpeedExtension are therefore available for prototype-patching.
+// Load core modules so window.VSC.DomUtils and window.VSC._shouldInjectInCurrentFrame
+// are available. inject.js is already in the ES module cache from inject.test.js.
 await loadCoreModules();
 
 const runner = new SimpleTestRunner();
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Helpers
+// Environment helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Save the current window.self property descriptor.
- * window.top is non-configurable in JSDOM; window.self IS configurable.
- * We patch window.self to a different object to simulate a sub-frame.
- */
-function saveWindowSelfDescriptor() {
-  return Object.getOwnPropertyDescriptor(window, 'self');
-}
-
-/**
- * Simulate being inside an iframe:
- *   inIframe() checks window.self !== window.top
- *   window.top is fixed (non-configurable) so we patch window.self instead.
+ * Patch window.self to an object !== window.top to simulate a sub-frame.
+ * window.top is non-configurable in JSDOM; window.self is configurable.
  * Returns a restore function that re-installs the original descriptor.
  */
 function simulateIframe() {
-  const origDesc = saveWindowSelfDescriptor();
+  const origDesc = Object.getOwnPropertyDescriptor(window, 'self');
   const fakeSelf = { location: window.location };
   Object.defineProperty(window, 'self', {
     get: () => fakeSelf,
@@ -71,10 +51,10 @@ function simulateIframe() {
 }
 
 /**
- * Ensure window.self is in its native JSDOM state (self === top === window).
- * Restores from the descriptor saved at module load time.
+ * Restore window.self to its native JSDOM state (self === top === window).
+ * Captured once at module load time before any test can mutate it.
  */
-const nativeSelfDesc = saveWindowSelfDescriptor();
+const nativeSelfDesc = Object.getOwnPropertyDescriptor(window, 'self');
 function ensureTopFrame() {
   if (nativeSelfDesc) {
     Object.defineProperty(window, 'self', nativeSelfDesc);
@@ -82,167 +62,76 @@ function ensureTopFrame() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Test 1 — DomUtils.inIframe() contract: top frame returns false  [GREEN]
+// Test 1 — DomUtils.inIframe(): top frame returns false
 // ─────────────────────────────────────────────────────────────────────────────
 
-runner.test(
-  'Test 1 [GREEN] DomUtils.inIframe() returns false when window.self === window.top (top frame)',
-  () => {
-    ensureTopFrame();
+runner.test('DomUtils.inIframe() returns false in a top-level frame', () => {
+  ensureTopFrame();
 
-    const result = window.VSC.DomUtils.inIframe();
+  assert.false(
+    window.VSC.DomUtils.inIframe(),
+    'inIframe() must return false when window.self === window.top'
+  );
+});
 
-    assert.false(
-      result,
-      'inIframe() must return false in a top-level frame where window.self === window.top'
-    );
+// ─────────────────────────────────────────────────────────────────────────────
+// Test 1b — DomUtils.inIframe(): sub-frame returns true
+// ─────────────────────────────────────────────────────────────────────────────
+
+runner.test('DomUtils.inIframe() returns true in a sub-frame', () => {
+  const restore = simulateIframe();
+  let result;
+  try {
+    result = window.VSC.DomUtils.inIframe();
+  } finally {
+    restore();
   }
-);
+
+  assert.true(result, 'inIframe() must return true when window.self !== window.top');
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Test 1b — DomUtils.inIframe() contract: sub-frame returns true  [GREEN]
+// Test 2 — frame guard returns false for a same-origin sub-frame
+//
+// In JSDOM, window.parent.document is always accessible (same-origin), so the
+// guard's rule "same-origin parent → skip" is exercised without any stubbing.
+// We control the iframe condition through window.self only.
 // ─────────────────────────────────────────────────────────────────────────────
 
 runner.test(
-  'Test 1b [GREEN] DomUtils.inIframe() returns true when window.self !== window.top (sub-frame)',
+  'shouldInjectInCurrentFrame() returns false in a same-origin sub-frame',
   () => {
-    // Patch window.self to an object !== window.top to simulate a nested frame.
+    const guardFn = window.VSC._shouldInjectInCurrentFrame;
     const restore = simulateIframe();
-
     let result;
     try {
-      result = window.VSC.DomUtils.inIframe();
+      result = guardFn();
     } finally {
       restore();
     }
 
-    assert.true(
-      result,
-      'inIframe() must return true in a sub-frame where window.self !== window.top'
-    );
-  }
-);
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Test 2 — inject.js must NOT call initialize() in an iframe  [RED]
-//
-// Gap 3 (T1-A3): inject.js line 660 calls extension.initialize() unconditionally.
-// No shouldInjectInCurrentFrame() guard exists.
-//
-// This test is RED because:
-//   - The module-level auto-init in inject.js already fired at module load time
-//     without any frame check.
-//   - inject.js does not expose shouldInjectInCurrentFrame() on any public surface,
-//     so there is no verifiable guard to test against.
-//
-// The test becomes GREEN when inject.js:
-//   1. Adds shouldInjectInCurrentFrame() and exposes it as
-//      window.VSC._shouldInjectInCurrentFrame (for testability).
-//   2. Wraps the line-660 auto-init in if (shouldInjectInCurrentFrame()) { ... }.
-// ─────────────────────────────────────────────────────────────────────────────
-
-runner.test(
-  'Test 2 inject.js must NOT call extension.initialize() when running in an iframe',
-  async () => {
-    installChromeMock();
-    resetMockStorage();
-
-    // Verify the iframe simulation is working.
-    const restoreIframe = simulateIframe();
-    let inIframeResult;
-    try {
-      inIframeResult = window.VSC.DomUtils.inIframe();
-    } finally {
-      restoreIframe();
-    }
-
-    assert.true(
-      inIframeResult,
-      'Precondition: inIframe() must return true with patched window.self'
-    );
-
-    ensureTopFrame(); // restore to clean state for the rest of the test
-
-    try {
-      // ── Primary RED assertion ──────────────────────────────────────────────
-      // inject.js must expose shouldInjectInCurrentFrame() as a testable function
-      // at window.VSC._shouldInjectInCurrentFrame. This surface lets us verify
-      // that the frame guard returns false for sub-frame contexts without
-      // re-importing the module.
-      //
-      // Currently this function does not exist anywhere in inject.js, so the
-      // assertion below FAILS (RED).
-      const guardFn = window.VSC?._shouldInjectInCurrentFrame;
-
-      assert.true(
-        typeof guardFn === 'function',
-        '[RED] inject.js exposes no shouldInjectInCurrentFrame() guard at ' +
-          'window.VSC._shouldInjectInCurrentFrame. ' +
-          'Gap 3: extension.initialize() is called unconditionally at inject.js line 660 ' +
-          'with no iframe check. Fix: add shouldInjectInCurrentFrame() per T1-A3 Phase 5 ' +
-          'and expose it as window.VSC._shouldInjectInCurrentFrame for testability.'
-      );
-
-      // ── Secondary assertion (only reached after fix) ───────────────────────
-      // Once the guard exists, simulate an iframe and verify it returns false.
-      const restoreForGuardTest = simulateIframe();
-      // Also mock inIframe on DomUtils to ensure the guard delegates to it
-      // (window.top non-configurable workaround).
-      const origInIframe = window.VSC.DomUtils.inIframe;
-      window.VSC.DomUtils.inIframe = () => true;
-
-      let guardResult;
-      try {
-        guardResult = guardFn();
-      } finally {
-        window.VSC.DomUtils.inIframe = origInIframe;
-        restoreForGuardTest();
-      }
-
-      assert.false(
-        guardResult,
-        'shouldInjectInCurrentFrame() must return false in a same-origin sub-frame context ' +
-          '(JSDOM: window.parent === window, so parent.document is accessible without SecurityError)'
-      );
-    } finally {
-      cleanupChromeMock();
-    }
-  }
-);
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Test 3 — inject.js MUST call initialize() in the top frame  [GREEN]
-//
-// Current code is GREEN: unconditional initialize() always fires.
-// Post-fix code must remain GREEN: shouldInjectInCurrentFrame() returns true
-// for top-frame context (window.self === window.top).
-// ─────────────────────────────────────────────────────────────────────────────
-
-runner.test(
-  'Test 3 [GREEN] inject.js MUST call extension.initialize() when running in the top frame',
-  () => {
-    ensureTopFrame();
-
     assert.false(
-      window.VSC.DomUtils.inIframe(),
-      'Precondition: inIframe() must be false in JSDOM default top-frame context'
-    );
-
-    // The real production function must be exposed by inject.js.
-    const guardFn = window.VSC._shouldInjectInCurrentFrame;
-    assert.true(
-      typeof guardFn === 'function',
-      'inject.js must expose shouldInjectInCurrentFrame as window.VSC._shouldInjectInCurrentFrame'
-    );
-
-    // In top-frame context (window.self === window.top) the real guard must return true.
-    const result = guardFn();
-    assert.true(
       result,
-      'window.VSC._shouldInjectInCurrentFrame() must return true when running in the top-level ' +
-        'frame (window.self === window.top). inject.js must call extension.initialize() in this context.'
+      'shouldInjectInCurrentFrame() must return false in a same-origin sub-frame ' +
+        '(window.parent.document is accessible — top-level frame handles initialization)'
     );
   }
 );
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Test 3 — frame guard returns true in the top-level frame
+// ─────────────────────────────────────────────────────────────────────────────
+
+runner.test('shouldInjectInCurrentFrame() returns true in the top-level frame', () => {
+  ensureTopFrame();
+
+  const result = window.VSC._shouldInjectInCurrentFrame();
+
+  assert.true(
+    result,
+    'shouldInjectInCurrentFrame() must return true when window.self === window.top ' +
+      'so that extension.initialize() runs in top-level documents'
+  );
+});
 
 export { runner as injectFrameGuardRunner };

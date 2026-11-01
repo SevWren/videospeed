@@ -21,87 +21,127 @@ await import('../../../src/utils/event-manager.js');
 const runner = new SimpleTestRunner();
 
 // ---------------------------------------------------------------------------
-// Test 1 — namespace contract
+// Test 1 — keyboard shortcuts are registered on both documents when in an iframe
 //
-// window.VSC.DomUtils.inIframe MUST be a function (it is defined in dom-utils.js).
-// window.VSC.inIframe MUST be undefined (no such path exists in the codebase).
+// When setupKeyboardShortcuts runs inside an iframe (inIframe() returns true),
+// it must register a keydown listener on BOTH the local document AND
+// window.top.document.  If the namespace is wrong (window.VSC.inIframe instead
+// of window.VSC.DomUtils.inIframe), the call throws a TypeError that is silently
+// swallowed, the iframe branch never executes, and only the local document gets
+// a listener.
 //
-// This test documents the namespace contract and will remain GREEN both before
-// and after the fix — its value is as explicit specification documentation.
+// Observable behavior: after the call, the top-level document's addEventListener
+// must have been invoked.  This goes RED against current code because the
+// TypeError means the iframe check is never reached, and GREEN after the fix.
 // ---------------------------------------------------------------------------
-runner.test('window.VSC.DomUtils.inIframe is a function and window.VSC.inIframe is undefined', () => {
-  assert.equal(
-    typeof window.VSC.DomUtils.inIframe,
-    'function',
-    'window.VSC.DomUtils.inIframe should be a function (defined in dom-utils.js)'
-  );
+runner.test('setupKeyboardShortcuts registers keydown listeners on two documents when inside an iframe', () => {
+  // Behavioral contract: when inIframe() returns true, setupKeyboardShortcuts must
+  // register listeners on BOTH the supplied local document AND window.top.document.
+  // In JSDOM, window.top.document === window.document (same-origin), so we assert
+  // manager.listeners has two entries: the fakeLocalDoc and window.top.document.
+  //
+  // Buggy code path (wrong namespace): window.VSC.inIframe() throws TypeError,
+  // the catch block swallows it, the iframe branch never runs, only fakeLocalDoc
+  // gets a listener (size === 1).
+  // Fixed code path: window.VSC.DomUtils.inIframe() returns true correctly,
+  // docs gets both fakeLocalDoc and window.top.document (size === 2).
+  //
+  // window.top is non-configurable in JSDOM so we do NOT attempt to redefine it;
+  // we rely on the observable fact that two entries appear in the listeners map.
 
-  assert.equal(
-    typeof window.VSC.inIframe,
-    'undefined',
-    'window.VSC.inIframe should be undefined — there is no such namespace path'
-  );
+  const stubConfig = {
+    settings: { keyBindings: [] },
+    getMediaElements: () => [],
+    getGifElements: () => [],
+  };
+  const stubActionHandler = {};
+
+  const originalDomUtils = window.VSC.DomUtils;
+  window.VSC.DomUtils = Object.assign({}, originalDomUtils, {
+    inIframe: () => true,
+  });
+
+  const manager = new window.VSC.EventManager(stubConfig, stubActionHandler);
+  // Constructor calls setupKeyboardShortcuts(document) immediately.
+  // Clear to isolate the explicit call below.
+  manager.listeners.clear();
+
+  const fakeLocalDoc = { addEventListener: () => {} };
+
+  try {
+    manager.setupKeyboardShortcuts(fakeLocalDoc);
+
+    // iframe mode: fakeLocalDoc + window.top.document (= window.document in JSDOM)
+    assert.equal(
+      manager.listeners.has(fakeLocalDoc),
+      true,
+      'local document must be registered in listeners map',
+    );
+    assert.equal(
+      manager.listeners.has(window.top.document),
+      true,
+      'window.top.document must be registered in listeners map when inside an iframe ' +
+        '(fails if wrong namespace: TypeError swallowed, branch skipped, only 1 entry)',
+    );
+    assert.equal(
+      manager.listeners.size,
+      2,
+      'exactly two documents must be registered when inside an iframe',
+    );
+  } finally {
+    window.VSC.DomUtils = originalDomUtils;
+  }
 });
 
 // ---------------------------------------------------------------------------
-// Test 2 — EventManager.setupKeyboardShortcuts calls the correct namespace
+// Test 2 — keyboard shortcuts are registered only on the local document when
+//           NOT in an iframe
 //
-// We install a spy on window.VSC.DomUtils.inIframe and deliberately do NOT
-// install anything at window.VSC.inIframe.  After calling setupKeyboardShortcuts
-// the spy on the CORRECT path must have been called at least once.
+// When inIframe() returns false, setupKeyboardShortcuts must register a keydown
+// listener only on the supplied document, and must NOT attempt to access
+// window.top.document (which could throw a cross-origin SecurityError).
 //
-// Against current code (which calls window.VSC.inIframe()) the spy is never
-// reached, so this test goes RED.  After the fix (window.VSC.DomUtils.inIframe())
-// the spy is invoked and the test goes GREEN.
+// This test remains GREEN both before and after the fix and specifies the
+// non-iframe path of the same behavior slice.
 // ---------------------------------------------------------------------------
-runner.test('EventManager.setupKeyboardShortcuts calls window.VSC.DomUtils.inIframe, not window.VSC.inIframe', () => {
-  // --- setup spy ---
-  const original = window.VSC.DomUtils.inIframe;
-  let correctNamespaceCalled = false;
+runner.test('setupKeyboardShortcuts registers a keydown listener only on the local document when not in an iframe', () => {
+  const stubConfig = {
+    settings: { keyBindings: [] },
+    getMediaElements: () => [],
+    getGifElements: () => [],
+  };
+  const stubActionHandler = {};
 
-  window.VSC.DomUtils.inIframe = function () {
-    correctNamespaceCalled = true;
-    return false; // report "not in iframe" so the test stays self-contained
+  const manager = new window.VSC.EventManager(stubConfig, stubActionHandler);
+
+  const localDocEvents = [];
+  const fakeLocalDoc = {
+    addEventListener: (type, _handler, _capture) => localDocEvents.push(type),
   };
 
-  // Ensure the wrong path is absent so the current bug produces a TypeError
-  // (which event-manager.js silently swallows), confirming the call never
-  // reaches the correct namespace.
-  const wrongPathBefore = window.VSC.inIframe;
-  delete window.VSC.inIframe; // make sure it is truly undefined
+  // DomUtils surrogate reporting "not in an iframe".
+  const originalDomUtils = window.VSC.DomUtils;
+  window.VSC.DomUtils = Object.assign({}, originalDomUtils, {
+    inIframe: () => false,
+  });
 
   try {
-    // Build a minimal config stub — just enough for the constructor and
-    // setupKeyboardShortcuts to run without crashing on unrelated paths.
-    const stubConfig = {
-      settings: { keyBindings: [] },
-      getMediaElements: () => [],
-      getGifElements: () => [],
-    };
-    const stubActionHandler = {};
+    manager.setupKeyboardShortcuts(fakeLocalDoc);
 
-    const manager = new window.VSC.EventManager(stubConfig, stubActionHandler);
-
-    // Create a minimal document stub so addEventListener doesn't throw.
-    const fakeDoc = {
-      addEventListener: () => {},
-    };
-
-    manager.setupKeyboardShortcuts(fakeDoc);
-
-    // The critical assertion: the CORRECT namespace must have been called.
     assert.equal(
-      correctNamespaceCalled,
+      localDocEvents.includes('keydown'),
       true,
-      'window.VSC.DomUtils.inIframe should have been called by setupKeyboardShortcuts ' +
-        '(current code calls window.VSC.inIframe instead — wrong namespace)'
+      'local document must receive a keydown listener even when not in an iframe',
+    );
+
+    // Only the local document should be in the listeners map.
+    assert.equal(
+      manager.listeners.size,
+      1,
+      'listeners map must contain exactly one document entry when not in an iframe',
     );
   } finally {
-    // Restore original state regardless of pass/fail.
-    window.VSC.DomUtils.inIframe = original;
-    if (wrongPathBefore !== undefined) {
-      window.VSC.inIframe = wrongPathBefore;
-    }
+    window.VSC.DomUtils = originalDomUtils;
   }
 });
 

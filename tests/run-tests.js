@@ -180,6 +180,9 @@ async function runTests() {
       'unit/core/gif-controller-static.test.js',
       'unit/core/action-handler-gif.test.js',
       'unit/content/injector-relay.test.js',
+      'unit/content/injector-frame-guard.test.js',
+      'unit/content/background-inject.test.js',
+      'unit/manifest/permissions.test.js',
     ];
   } else if (testType === 'integration') {
     testFiles = [
@@ -207,6 +210,9 @@ async function runTests() {
       'unit/core/gif-controller-static.test.js',
       'unit/core/action-handler-gif.test.js',
       'unit/content/injector-relay.test.js',
+      'unit/content/injector-frame-guard.test.js',
+      'unit/content/background-inject.test.js',
+      'unit/manifest/permissions.test.js',
       'integration/module-integration.test.js',
       'integration/gif-integration.test.js',
     ];

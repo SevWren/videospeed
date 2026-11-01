@@ -10,12 +10,14 @@ window.VSC.Constants = {};
 
 // Skip loading if already loaded to prevent redeclaration errors
 if (!window.VSC.Constants.DEFAULT_SETTINGS) {
-  // Add debug info to DOM for inspection
-  const debugDiv = document.createElement('div');
-  debugDiv.id = 'vsc-constants-loaded';
-  debugDiv.style.display = 'none';
-  debugDiv.textContent = `Constants loaded at ${new Date().toISOString()}`;
-  document.head.appendChild(debugDiv);
+  // Add debug info to DOM for inspection (guard: document.head may be null in sub-frames)
+  if (document.head) {
+    const debugDiv = document.createElement('div');
+    debugDiv.id = 'vsc-constants-loaded';
+    debugDiv.style.display = 'none';
+    debugDiv.textContent = `Constants loaded at ${new Date().toISOString()}`;
+    document.head.appendChild(debugDiv);
+  }
 
   // Define constants directly first for ES6 exports
   const regStrip = /^[\r\t\f\v ]+|[\r\t\f\v ]+$/gm;

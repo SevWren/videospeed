@@ -674,8 +674,10 @@ window.addEventListener('VSC_USER_SETTINGS', (event) => {
   extension.config.applySettings(event.detail);
 });
 
-// Add test indicator for E2E tests
-const testIndicator = document.createElement('div');
-testIndicator.id = 'vsc-test-indicator';
-testIndicator.style.display = 'none';
-document.head.appendChild(testIndicator);
+// Add test indicator for E2E tests (guard: document.head may be null in sub-frames)
+if (document.head) {
+  const testIndicator = document.createElement('div');
+  testIndicator.id = 'vsc-test-indicator';
+  testIndicator.style.display = 'none';
+  document.head.appendChild(testIndicator);
+}

@@ -67,7 +67,6 @@
         "https://meet.google.com/*"
       ],
       "world": "MAIN",
-      "run_at": "document_start",
       "js": [
         "src/utils/constants.js",
         "src/utils/logger.js",
@@ -103,7 +102,6 @@
         "https://www.netflix.com/*"
       ],
       "world": "MAIN",
-      "run_at": "document_start",
       "js": [
         "src/site-handlers/scripts/netflix.js"
       ]

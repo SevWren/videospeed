@@ -43,6 +43,15 @@ left all 5 tests green. These tests could not catch any regression in real produ
 at least one `import` from that module. Tests that define clones of production functions
 fail review.
 
+## CS-3 Exception — content scripts
+
+A test file for a file that runs in Chrome's isolated world (a content script that cannot be loaded as an ES module in JSDOM) may mirror production logic inline, provided:
+1. The test file's opening comment names the production file it mirrors and explains why a direct import is not possible.
+2. The mirrored constants are kept identical to the production copy — any divergence is itself a regression, caught by Seam B tests or manual diff.
+3. Where the regression guard requires asserting structural properties of the production file (e.g., listener count), a **structural source test** must be used instead of an inline behavioral clone: read the production file via `readFileSync` and assert on its content.
+
+This exception applies only to content-script files. All other production modules must be imported directly.
+
 ## CS-4: PR body must include `## Evidence` for injection-path changes
 
 Any PR that changes the extension injection behavior, manifest permissions, or module load
@@ -56,3 +65,20 @@ after the change. For the injection path specifically, the evidence should confi
 `host_permissions` gap was present and unreported.
 
 **Review rule:** Behavioral PRs without `## Evidence` fail review.
+
+## CS-5: A module-level constant used by exactly one statement is a co-location smell
+
+If a named constant is only ever referenced by a single downstream statement — especially
+a single event-listener callback — it should be defined immediately adjacent to that
+statement (inline or as a `const` directly above its only use). A constant that floats
+above multiple listeners with no clear owner is a signal that one of those listeners may
+be stale or duplicated.
+
+**Why:** In `injector.js`, `USER_CONTROLLED_KEYS` was defined at module level but was only
+consumed by a stale first `chrome.storage.onChanged` listener. The surviving second listener
+used its own adjacent `_VSC_USER_CONTROLLED_KEYS`. The mismatch between constant ownership
+and listener count was the only visible structural signal of the duplication, and it was not
+caught across multiple review sessions.
+
+**Review rule:** Any PR that defines a constant used by only one listener or callback in
+the same scope should be flagged: verify there is exactly one owner.

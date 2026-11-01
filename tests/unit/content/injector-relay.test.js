@@ -13,8 +13,14 @@
  * if the mock regresses, these tests catch it before the Seam B tests run.
  */
 
+import { readFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { installChromeMock, cleanupChromeMock, resetMockStorage } from '../../helpers/chrome-mock.js';
 import { SimpleTestRunner, assert } from '../../helpers/test-utils.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const runner = new SimpleTestRunner();
 
@@ -149,44 +155,28 @@ runner.test('all USER_CONTROLLED_KEYS pass through the relay', () => {
   }
 });
 
-// ── Fix D: single storage.onChanged relay listener ────────────────────────────
+// ── Fix D: single storage.onChanged relay listener (structural source guard) ───
 // Regression guard: injector.js must register exactly ONE chrome.storage.onChanged
-// listener. A previous version registered two listeners (one with 10 keys, one with
-// 11 keys). Every storage change fired VSC_USER_SETTINGS twice, applying settings
-// double. This test verifies that a single storage change produces exactly one
-// VSC_USER_SETTINGS dispatch.
+// listener inside setupMessageBridge(). A previous version registered two listeners
+// (one with 10 keys, one with 11 keys). Every options-page save fired
+// VSC_USER_SETTINGS twice per tab.
 //
-// The chrome-mock's triggerStorageChange fires all registered listeners. If two
-// listeners were registered, two VSC_USER_SETTINGS events would be dispatched and
-// dispatchCount would equal 2 — catching the regression.
+// This is a STRUCTURAL test (reads the production source file directly) rather than
+// a behavioral one. injector.js is a content script that cannot be loaded as an ES
+// module in JSDOM, so a behavioral test cannot import it and therefore cannot count
+// its actual registered listeners. The structural assertion is the highest available
+// seam for this specific invariant: if the duplicate is re-introduced, the count
+// becomes 2 and this test fails immediately — no browser run needed.
 
-runner.test('Fix D: exactly one VSC_USER_SETTINGS event is dispatched per storage change', () => {
-  installChromeMock();
-  resetMockStorage();
-
-  let dispatchCount = 0;
-  const handler = () => { dispatchCount++; };
-  window.addEventListener('VSC_USER_SETTINGS', handler);
-
-  // Register exactly one relay listener (mirrors the single listener in injector.js)
-  chrome.storage.onChanged.addListener((changes, areaName) => {
-    if (areaName !== 'sync') return;
-    const patch = {};
-    for (const key of USER_CONTROLLED_KEYS) {
-      if (Object.prototype.hasOwnProperty.call(changes, key)) {
-        patch[key] = changes[key].newValue;
-      }
-    }
-    if (Object.keys(patch).length === 0) return;
-    window.dispatchEvent(new CustomEvent('VSC_USER_SETTINGS', { detail: patch }));
-  });
-
-  chrome.storage.onChanged.triggerStorageChange({ keyBindings: { newValue: [] } }, 'sync');
-
-  window.removeEventListener('VSC_USER_SETTINGS', handler);
-  cleanupChromeMock();
-
-  assert.equal(dispatchCount, 1, 'Fix D: VSC_USER_SETTINGS must fire exactly once per storage change — duplicate listener would fire twice');
+runner.test('Fix D: injector.js registers exactly one chrome.storage.onChanged listener', () => {
+  const src = readFileSync(join(__dirname, '../../../src/content/injector.js'), 'utf8');
+  const matches = (src.match(/chrome\.storage\.onChanged\.addListener/g) || []);
+  assert.equal(
+    matches.length,
+    1,
+    `Fix D: injector.js must have exactly ONE chrome.storage.onChanged.addListener call — ` +
+    `found ${matches.length}. A duplicate causes double VSC_USER_SETTINGS dispatch on every options-page save.`
+  );
 });
 
 runner.test('non-sync area produces no relay dispatch', () => {

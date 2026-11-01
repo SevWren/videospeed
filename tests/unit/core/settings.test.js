@@ -178,4 +178,184 @@ runner.test('applySettings mutates this.settings in place (stable reference)', (
   assert.equal(ref.startHidden, true, 'mutation should be visible through original reference');
 });
 
+// ── getKeyBinding / setKeyBinding error-path catch blocks (lines 139-141, 156-157) ──
+
+runner.test('getKeyBinding returns false when keyBindings is null (catch branch)', () => {
+  // RED: before the try/catch in getKeyBinding was present, setting keyBindings to null
+  // and calling getKeyBinding would throw a TypeError instead of returning false.
+  const config = new window.VSC.VideoSpeedConfig();
+  // Force keyBindings to null to trigger the catch path (lines 139-141)
+  config.settings.keyBindings = null;
+
+  const result = config.getKeyBinding('faster');
+
+  assert.equal(result, false, 'getKeyBinding should return false when keyBindings is null');
+});
+
+runner.test('setKeyBinding does not throw when keyBindings is null (catch branch)', () => {
+  // RED: before the try/catch in setKeyBinding was present, setting keyBindings to null
+  // and calling setKeyBinding would throw a TypeError instead of silently catching.
+  const config = new window.VSC.VideoSpeedConfig();
+  // Force keyBindings to null to trigger the catch path (lines 156-157)
+  config.settings.keyBindings = null;
+
+  // Must not throw
+  config.setKeyBinding('faster', 0.5);
+});
+
+// ── initializeDefaultKeyBindings (lines 166-269) ────────────────────────────
+
+runner.test('initializeDefaultKeyBindings builds key bindings from legacy storage values', async () => {
+  // RED: before initializeDefaultKeyBindings populated keyBindings from the storage
+  // legacy fields, calling it with legacy values yielded an empty keyBindings array.
+  const config = new window.VSC.VideoSpeedConfig();
+  await config.load();
+
+  const legacyStorage = {
+    slowerKeyCode: 65,   // 'A'
+    fasterKeyCode: 68,   // 'D'
+    speedStep: 0.25,
+    rewindKeyCode: 82,   // 'R'
+    rewindTime: 15,
+    advanceKeyCode: 70,  // 'F'
+    advanceTime: 20,
+    resetKeyCode: 83,    // 'S'
+    fastKeyCode: 71,     // 'G'
+    fastSpeed: 2.0,
+  };
+
+  await config.initializeDefaultKeyBindings(legacyStorage);
+
+  // 'slower' binding should use legacy slowerKeyCode and speedStep
+  const slowerKey = config.settings.keyBindings.find((b) => b.action === 'slower');
+  assert.exists(slowerKey, 'slower binding must exist');
+  assert.equal(slowerKey.key, 65, 'slower key must be legacy slowerKeyCode 65');
+  assert.equal(slowerKey.value, 0.25, 'slower value must be legacy speedStep 0.25');
+
+  // 'faster' binding
+  const fasterKey = config.settings.keyBindings.find((b) => b.action === 'faster');
+  assert.exists(fasterKey, 'faster binding must exist');
+  assert.equal(fasterKey.key, 68, 'faster key must be legacy fasterKeyCode 68');
+
+  // 'reset' binding always has value 1.0
+  const resetKey = config.settings.keyBindings.find((b) => b.action === 'reset');
+  assert.exists(resetKey, 'reset binding must exist');
+  assert.equal(resetKey.value, 1.0, 'reset binding value must be 1.0');
+});
+
+runner.test('initializeDefaultKeyBindings uses fallback defaults when storage has no legacy keys', async () => {
+  // RED: before the || fallback literals were in place, calling with an empty storage
+  // object yielded NaN for all key codes, failing the number assertions.
+  const config = new window.VSC.VideoSpeedConfig();
+  await config.load();
+
+  await config.initializeDefaultKeyBindings({});
+
+  // Fallback key codes per source: slower=90, faster=67, rewind=69, advance=82, reset=83, fast=88
+  const slowerKey = config.settings.keyBindings.find((b) => b.action === 'slower');
+  assert.exists(slowerKey, 'slower binding must exist with fallback key');
+  assert.equal(slowerKey.key, 90, 'slower fallback key must be 90 (Z)');
+
+  const fasterKey = config.settings.keyBindings.find((b) => b.action === 'faster');
+  assert.equal(fasterKey.key, 67, 'faster fallback key must be 67 (C)');
+});
+
+runner.test('initializeDefaultKeyBindings includes hardcoded W/T/M/J bindings', async () => {
+  // RED: before the W/T/M/J entries were added in initializeDefaultKeyBindings, the
+  // returned keyBindings lacked those actions.
+  const config = new window.VSC.VideoSpeedConfig();
+  await config.load();
+
+  await config.initializeDefaultKeyBindings({});
+
+  const allActions = config.settings.keyBindings.map((b) => b.action);
+
+  // W key (87) — extra rewind
+  const rewindBindings = config.settings.keyBindings.filter((b) => b.action === 'rewind');
+  assert.true(rewindBindings.length >= 2, 'must have at least two rewind bindings (E and W)');
+  const wRewind = rewindBindings.find((b) => b.key === 87);
+  assert.exists(wRewind, 'rewind binding with key 87 (W) must exist');
+  assert.equal(wRewind.value, 120, 'W rewind value must be 120');
+
+  // T key (84) — extra advance
+  const advanceBindings = config.settings.keyBindings.filter((b) => b.action === 'advance');
+  assert.true(advanceBindings.length >= 2, 'must have at least two advance bindings (R and T)');
+  const tAdvance = advanceBindings.find((b) => b.key === 84);
+  assert.exists(tAdvance, 'advance binding with key 84 (T) must exist');
+
+  // M key (77) — mark
+  assert.true(allActions.includes('mark'), 'mark action must be present');
+  const markBinding = config.settings.keyBindings.find((b) => b.action === 'mark');
+  assert.equal(markBinding.key, 77, 'mark key must be 77 (M)');
+
+  // J key (74) — jump
+  assert.true(allActions.includes('jump'), 'jump action must be present');
+  const jumpBinding = config.settings.keyBindings.find((b) => b.action === 'jump');
+  assert.equal(jumpBinding.key, 74, 'jump key must be 74 (J)');
+});
+
+runner.test('initializeDefaultKeyBindings sets version to 0.5.3', async () => {
+  // RED: before the version assignment on line 250, config.settings.version was not
+  // set by this method, causing this assertion to fail.
+  const config = new window.VSC.VideoSpeedConfig();
+  await config.load();
+
+  await config.initializeDefaultKeyBindings({});
+
+  assert.equal(config.settings.version, '0.5.3', 'version must be set to 0.5.3 after migration');
+});
+
+runner.test('initializeDefaultKeyBindings persists bindings via StorageManager.set', async () => {
+  // RED: before the StorageManager.set call at the end of initializeDefaultKeyBindings,
+  // chrome.storage.sync.set was never called, so keyBindings were not persisted.
+  const config = new window.VSC.VideoSpeedConfig();
+  await config.load();
+
+  const savedCalls = [];
+  const originalSet = window.VSC.StorageManager.set.bind(window.VSC.StorageManager);
+  window.VSC.StorageManager.set = async (data) => {
+    savedCalls.push(data);
+    return originalSet(data);
+  };
+
+  try {
+    await config.initializeDefaultKeyBindings({});
+  } finally {
+    window.VSC.StorageManager.set = originalSet;
+  }
+
+  assert.true(savedCalls.length >= 1, 'StorageManager.set must be called at least once');
+  const savedData = savedCalls[savedCalls.length - 1];
+  assert.exists(savedData.keyBindings, 'persisted data must include keyBindings');
+  assert.equal(savedData.version, '0.5.3', 'persisted data must include version 0.5.3');
+});
+
+// ── gif element tracking (addGifElement / removeGifElement / getGifElements) ──
+
+runner.test('VideoSpeedConfig tracks GIF elements via add/remove/getGifElements', () => {
+  // RED: before addGifElement/removeGifElement/getGifElements were implemented, the
+  // gifElements Set was not managed and getGifElements() always returned [].
+  const config = new window.VSC.VideoSpeedConfig();
+  const fakeImg = document.createElement('img');
+
+  config.addGifElement(fakeImg);
+  assert.equal(config.getGifElements().length, 1, 'one GIF element must be tracked after add');
+  assert.equal(config.getGifElements()[0], fakeImg, 'tracked element must be the added img');
+
+  config.removeGifElement(fakeImg);
+  assert.equal(config.getGifElements().length, 0, 'no GIF elements must remain after remove');
+});
+
+runner.test('VideoSpeedConfig addGifElement does not duplicate elements', () => {
+  // RED: if addGifElement used an Array.push instead of Set.add, the same element
+  // could be added twice, causing the length assertion to fail.
+  const config = new window.VSC.VideoSpeedConfig();
+  const fakeImg = document.createElement('img');
+
+  config.addGifElement(fakeImg);
+  config.addGifElement(fakeImg); // second add of same element
+
+  assert.equal(config.getGifElements().length, 1, 'Set must deduplicate; length must remain 1');
+});
+
 export { runner as settingsTestRunner };

@@ -145,4 +145,135 @@ runner.test('setupKeyboardShortcuts registers a keydown listener only on the loc
   }
 });
 
+// ---------------------------------------------------------------------------
+// T-actions-utils: cover event-manager.js lines 73, 303-304, 311-313, 316-318
+// ---------------------------------------------------------------------------
+
+runner.test('EventManager cleanup removes all registered listeners and clears internal state', () => {
+  const removedEvents = [];
+  const fakeDoc = {
+    addEventListener: () => {},
+    removeEventListener: (type, _handler, _capture) => removedEvents.push(type),
+  };
+
+  const stubConfig = {
+    settings: { keyBindings: [] },
+    getMediaElements: () => [],
+    getGifElements: () => [],
+  };
+  const stubActionHandler = {};
+
+  const originalDomUtils = window.VSC.DomUtils;
+  window.VSC.DomUtils = Object.assign({}, originalDomUtils, { inIframe: () => false });
+
+  try {
+    const manager = new window.VSC.EventManager(stubConfig, stubActionHandler);
+
+    // Register listeners on a fake document
+    manager.setupKeyboardShortcuts(fakeDoc);
+    manager.setupRateChangeListener(fakeDoc);
+
+    assert.equal(manager.listeners.size > 0, true, 'listeners map must be non-empty before cleanup');
+
+    manager.cleanup();
+
+    // After cleanup the map must be empty (line 308: listeners.clear())
+    assert.equal(manager.listeners.size, 0, 'listeners map must be cleared after cleanup');
+
+    // removeEventListener must have been called for each registered event
+    assert.equal(removedEvents.length > 0, true, 'removeEventListener must be called during cleanup');
+  } finally {
+    window.VSC.DomUtils = originalDomUtils;
+  }
+});
+
+runner.test('EventManager cleanup clears active coolDown timer', () => {
+  const stubConfig = {
+    settings: { keyBindings: [] },
+    getMediaElements: () => [],
+    getGifElements: () => [],
+  };
+  const stubActionHandler = {};
+
+  const manager = new window.VSC.EventManager(stubConfig, stubActionHandler);
+
+  // Activate coolDown by calling refreshCoolDown
+  manager.refreshCoolDown();
+  assert.equal(!!manager.coolDown, true, 'coolDown should be truthy after refreshCoolDown');
+
+  manager.cleanup();
+
+  // After cleanup coolDown must be false (line 312: this.coolDown = false)
+  assert.equal(manager.coolDown, false, 'coolDown must be false after cleanup');
+});
+
+runner.test('EventManager cleanup clears active show timer', () => {
+  const stubConfig = {
+    settings: { keyBindings: [], startHidden: false },
+    getMediaElements: () => [],
+    getGifElements: () => [],
+  };
+  const stubActionHandler = {};
+
+  const manager = new window.VSC.EventManager(stubConfig, stubActionHandler);
+
+  // Activate the show timer by calling showController
+  const fakeController = {
+    classList: {
+      contains: () => false,
+      add: () => {},
+      remove: () => {},
+    },
+    style: { removeProperty: () => {} },
+  };
+  manager.showController(fakeController);
+  assert.equal(manager.timer !== null, true, 'timer should be set after showController');
+
+  manager.cleanup();
+
+  // After cleanup timer must be null (line 317: this.timer = null)
+  assert.equal(manager.timer, null, 'timer must be null after cleanup');
+});
+
+runner.test('EventManager handleKeydown deduplicates identical event signatures', () => {
+  const actionsRun = [];
+
+  const stubConfig = {
+    settings: {
+      keyBindings: [{ key: 65, action: 'faster', value: 0.1, force: false }],
+      controlGifs: false,
+    },
+    getMediaElements: () => {
+      const v = { tagName: 'VIDEO', vsc: { div: { classList: { contains: () => false } }, speedIndicator: { textContent: '' } } };
+      return [v];
+    },
+    getGifElements: () => [],
+  };
+
+  const stubActionHandler = {
+    runAction: (action) => actionsRun.push(action),
+  };
+
+  const manager = new window.VSC.EventManager(stubConfig, stubActionHandler);
+
+  const fakeEvent = {
+    keyCode: 65,
+    key: 'a',
+    timeStamp: 1000,
+    type: 'keydown',
+    target: document.body,
+    getModifierState: () => false,
+    composedPath: () => [document.body],
+    preventDefault: () => {},
+    stopPropagation: () => {},
+  };
+
+  // First dispatch — should process
+  manager.handleKeydown(fakeEvent);
+  // Second dispatch with same signature — must be deduplicated (line 73: return)
+  manager.handleKeydown(fakeEvent);
+
+  assert.equal(actionsRun.length, 1, 'duplicate keydown event must be processed only once');
+});
+
 export { runner };

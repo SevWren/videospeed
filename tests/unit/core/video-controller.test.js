@@ -193,4 +193,319 @@ runner.test('VideoController should track media elements in config', async () =>
   assert.equal(config.getMediaElements().length, 2);
 });
 
+// ── isVideoVisible (lines 349-367) ──────────────────────────────────────────
+
+runner.test('isVideoVisible returns false when video is not connected to DOM', async () => {
+  // RED: before the isConnected check in isVideoVisible, a detached video returned
+  // true, causing the assertion to fail.
+  const config = new window.VSC.VideoSpeedConfig();
+  await config.load();
+
+  const eventManager = new window.VSC.EventManager(config, null);
+  const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+  const mockVideo = createMockVideo();
+  mockDOM.container.appendChild(mockVideo);
+
+  const controller = new window.VSC.VideoController(mockVideo, null, config, actionHandler);
+
+  // Detach from DOM so isConnected returns false
+  mockDOM.container.removeChild(mockVideo);
+
+  const visible = controller.isVideoVisible();
+  assert.equal(visible, false, 'isVideoVisible must return false when video is not connected');
+});
+
+runner.test('isVideoVisible returns false when video has display:none style', async () => {
+  // RED: before the getComputedStyle check, a video with display:none still returned
+  // true from isVideoVisible.
+  const config = new window.VSC.VideoSpeedConfig();
+  await config.load();
+
+  const eventManager = new window.VSC.EventManager(config, null);
+  const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+  const mockVideo = createMockVideo();
+  mockDOM.container.appendChild(mockVideo);
+
+  // Override getComputedStyle for this element to simulate display:none
+  const originalGetComputedStyle = window.getComputedStyle.bind(window);
+  window.getComputedStyle = (el) => {
+    if (el === mockVideo) {
+      return { display: 'none', visibility: 'visible', opacity: '1' };
+    }
+    return originalGetComputedStyle(el);
+  };
+
+  const controller = new window.VSC.VideoController(mockVideo, null, config, actionHandler);
+
+  let visible;
+  try {
+    visible = controller.isVideoVisible();
+  } finally {
+    window.getComputedStyle = originalGetComputedStyle;
+  }
+
+  assert.equal(visible, false, 'isVideoVisible must return false when display is none');
+});
+
+runner.test('isVideoVisible returns false when video has zero-width bounding rect', async () => {
+  // RED: before the getBoundingClientRect check, a video with zero dimensions still
+  // returned true from isVideoVisible.
+  const config = new window.VSC.VideoSpeedConfig();
+  await config.load();
+
+  const eventManager = new window.VSC.EventManager(config, null);
+  const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+  const mockVideo = createMockVideo();
+  mockDOM.container.appendChild(mockVideo);
+
+  // Override getBoundingClientRect to return zero dimensions
+  mockVideo.getBoundingClientRect = () => ({ width: 0, height: 0 });
+
+  const originalGetComputedStyle = window.getComputedStyle.bind(window);
+  window.getComputedStyle = (el) => {
+    if (el === mockVideo) {
+      return { display: 'block', visibility: 'visible', opacity: '1' };
+    }
+    return originalGetComputedStyle(el);
+  };
+
+  const controller = new window.VSC.VideoController(mockVideo, null, config, actionHandler);
+
+  let visible;
+  try {
+    visible = controller.isVideoVisible();
+  } finally {
+    window.getComputedStyle = originalGetComputedStyle;
+  }
+
+  assert.equal(visible, false, 'isVideoVisible must return false when bounding rect has zero width');
+});
+
+runner.test('isVideoVisible returns true when video is visible and has dimensions', async () => {
+  // RED: before the connected + computedStyle + rect checks all passed for a normal
+  // visible element, isVideoVisible returned false, failing this assertion.
+  const config = new window.VSC.VideoSpeedConfig();
+  await config.load();
+
+  const eventManager = new window.VSC.EventManager(config, null);
+  const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+  const mockVideo = createMockVideo();
+  mockDOM.container.appendChild(mockVideo);
+
+  const originalGetComputedStyle = window.getComputedStyle.bind(window);
+  window.getComputedStyle = (el) => {
+    if (el === mockVideo) {
+      return { display: 'block', visibility: 'visible', opacity: '1' };
+    }
+    return originalGetComputedStyle(el);
+  };
+
+  const controller = new window.VSC.VideoController(mockVideo, null, config, actionHandler);
+
+  let visible;
+  try {
+    visible = controller.isVideoVisible();
+  } finally {
+    window.getComputedStyle = originalGetComputedStyle;
+  }
+
+  // mockVideo.getBoundingClientRect returns {width:640, height:480} — non-zero
+  assert.equal(visible, true, 'isVideoVisible must return true for a connected visible video');
+});
+
+// ── updateVisibility (lines 374-410) ────────────────────────────────────────
+
+runner.test('updateVisibility hides controller when audio support is disabled (AUDIO branch)', async () => {
+  // RED: before the AUDIO branch in updateVisibility checked audioBoolean, calling
+  // updateVisibility on an audio controller with audioBoolean=false did not add
+  // vsc-hidden, failing the classList assertion.
+  const config = new window.VSC.VideoSpeedConfig();
+  await config.load();
+  config.settings.audioBoolean = false;
+
+  const eventManager = new window.VSC.EventManager(config, null);
+  const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+  // Create an AUDIO element (tagName === 'AUDIO') using defineProperties with configurable
+  const mockAudio = document.createElement('audio');
+  Object.defineProperties(mockAudio, {
+    playbackRate: { value: 1.0, writable: true, configurable: true },
+    currentSrc: { value: 'https://example.com/audio.mp3', writable: true, configurable: true },
+    currentTime: { value: 0, writable: true, configurable: true },
+    ownerDocument: { value: document, writable: true, configurable: true },
+  });
+  // Use defineProperty with configurable:true so tests can reassign
+  Object.defineProperty(mockAudio, 'getBoundingClientRect', {
+    value: () => ({ top: 0, left: 0, width: 640, height: 100 }),
+    writable: true,
+    configurable: true,
+  });
+  mockDOM.container.appendChild(mockAudio);
+
+  const controller = new window.VSC.VideoController(mockAudio, null, config, actionHandler);
+
+  // Ensure controller is NOT hidden initially
+  controller.div.classList.remove('vsc-hidden');
+
+  controller.updateVisibility();
+
+  assert.true(
+    controller.div.classList.contains('vsc-hidden'),
+    'updateVisibility must hide audio controller when audioBoolean is false'
+  );
+});
+
+runner.test('updateVisibility shows audio controller when audio support is enabled', async () => {
+  // RED: before the AUDIO audioBoolean branch in updateVisibility showed the controller,
+  // calling updateVisibility with audioBoolean=true left a hidden controller still hidden.
+  const config = new window.VSC.VideoSpeedConfig();
+  await config.load();
+  config.settings.audioBoolean = true;
+
+  const eventManager = new window.VSC.EventManager(config, null);
+  const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+  const mockAudio = document.createElement('audio');
+  Object.defineProperties(mockAudio, {
+    playbackRate: { value: 1.0, writable: true, configurable: true },
+    currentSrc: { value: 'https://example.com/audio.mp3', writable: true, configurable: true },
+    currentTime: { value: 0, writable: true, configurable: true },
+    ownerDocument: { value: document, writable: true, configurable: true },
+  });
+  mockAudio.getBoundingClientRect = () => ({ top: 0, left: 0, width: 640, height: 100 });
+  mockDOM.container.appendChild(mockAudio);
+
+  const controller = new window.VSC.VideoController(mockAudio, null, config, actionHandler);
+
+  // Force controller into hidden state (not manually hidden)
+  controller.div.classList.add('vsc-hidden');
+  // Ensure vsc-manual is not set
+  controller.div.classList.remove('vsc-manual');
+
+  controller.updateVisibility();
+
+  assert.false(
+    controller.div.classList.contains('vsc-hidden'),
+    'updateVisibility must show audio controller when audioBoolean is true and not manually hidden'
+  );
+});
+
+runner.test('updateVisibility hides video controller when video becomes invisible', async () => {
+  // RED: before the video visibility branch in updateVisibility added vsc-hidden when
+  // isVisible=false, the controller stayed visible even for off-screen videos.
+  const config = new window.VSC.VideoSpeedConfig();
+  await config.load();
+  config.settings.startHidden = false;
+
+  const eventManager = new window.VSC.EventManager(config, null);
+  const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+  const mockVideo = createMockVideo();
+  mockDOM.container.appendChild(mockVideo);
+
+  const originalGetComputedStyle = window.getComputedStyle.bind(window);
+  window.getComputedStyle = (el) => {
+    if (el === mockVideo) {
+      return { display: 'block', visibility: 'visible', opacity: '1' };
+    }
+    return originalGetComputedStyle(el);
+  };
+
+  const controller = new window.VSC.VideoController(mockVideo, null, config, actionHandler);
+
+  // Controller should not be hidden initially
+  controller.div.classList.remove('vsc-hidden');
+
+  // Now make the video invisible — zero dimensions
+  mockVideo.getBoundingClientRect = () => ({ width: 0, height: 0 });
+
+  let result;
+  try {
+    controller.updateVisibility();
+    result = controller.div.classList.contains('vsc-hidden');
+  } finally {
+    window.getComputedStyle = originalGetComputedStyle;
+  }
+
+  assert.true(result, 'updateVisibility must add vsc-hidden when video becomes invisible');
+});
+
+runner.test('updateVisibility shows video controller when video becomes visible', async () => {
+  // RED: before the visibility-show branch in updateVisibility removed vsc-hidden,
+  // a visible video that was previously hidden stayed hidden after updateVisibility.
+  const config = new window.VSC.VideoSpeedConfig();
+  await config.load();
+  config.settings.startHidden = false;
+
+  const eventManager = new window.VSC.EventManager(config, null);
+  const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+  const mockVideo = createMockVideo();
+  mockDOM.container.appendChild(mockVideo);
+
+  const originalGetComputedStyle = window.getComputedStyle.bind(window);
+  window.getComputedStyle = (el) => {
+    if (el === mockVideo) {
+      return { display: 'block', visibility: 'visible', opacity: '1' };
+    }
+    return originalGetComputedStyle(el);
+  };
+
+  const controller = new window.VSC.VideoController(mockVideo, null, config, actionHandler);
+
+  // Force controller to be hidden (but not manually)
+  controller.div.classList.add('vsc-hidden');
+  controller.div.classList.remove('vsc-manual');
+
+  let result;
+  try {
+    controller.updateVisibility();
+    result = controller.div.classList.contains('vsc-hidden');
+  } finally {
+    window.getComputedStyle = originalGetComputedStyle;
+  }
+
+  assert.false(result, 'updateVisibility must remove vsc-hidden when video becomes visible');
+});
+
+// ── dispatchControllerEvent error catch (lines 426-427) ─────────────────────
+
+runner.test('dispatchControllerEvent does not throw even if window.dispatchEvent fails', async () => {
+  // RED: before the try/catch in dispatchControllerEvent, a broken window.dispatchEvent
+  // propagated the error out of the constructor, crashing controller creation.
+  const config = new window.VSC.VideoSpeedConfig();
+  await config.load();
+
+  const eventManager = new window.VSC.EventManager(config, null);
+  const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+  const mockVideo = createMockVideo();
+  mockDOM.container.appendChild(mockVideo);
+
+  const controller = new window.VSC.VideoController(mockVideo, null, config, actionHandler);
+
+  // Temporarily break window.dispatchEvent to trigger the catch block
+  const originalDispatch = window.dispatchEvent.bind(window);
+  window.dispatchEvent = () => { throw new Error('dispatch forced failure'); };
+
+  let threw = false;
+  try {
+    controller.dispatchControllerEvent('VSC_CONTROLLER_REMOVED', {
+      controllerId: 'test-id',
+      videoSrc: 'https://example.com/video.mp4',
+      tagName: 'VIDEO',
+    });
+  } catch (_e) {
+    threw = true;
+  } finally {
+    window.dispatchEvent = originalDispatch;
+  }
+
+  assert.equal(threw, false, 'dispatchControllerEvent must not propagate errors from dispatchEvent');
+});
+
 export { runner as videoControllerTestRunner };

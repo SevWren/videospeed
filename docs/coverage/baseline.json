@@ -1,0 +1,457 @@
+{
+  "generated": "2026-11-01",
+  "command": "c8 node tests/run-tests.js",
+  "total": {
+    "statements": {
+      "total": 7651,
+      "covered": 3895,
+      "pct": 50.91
+    },
+    "branches": {
+      "total": 652,
+      "covered": 422,
+      "pct": 64.72
+    },
+    "functions": {
+      "total": 233,
+      "covered": 146,
+      "pct": 62.66
+    }
+  },
+  "files": {
+    "src/background.js": {
+      "statements": {
+        "total": 192,
+        "covered": 0
+      },
+      "branches": {
+        "total": 1,
+        "covered": 0
+      },
+      "functions": {
+        "total": 1,
+        "covered": 0
+      }
+    },
+    "src/gif-file-fetcher.js": {
+      "statements": {
+        "total": 72,
+        "covered": 0
+      },
+      "branches": {
+        "total": 1,
+        "covered": 0
+      },
+      "functions": {
+        "total": 1,
+        "covered": 0
+      }
+    },
+    "src/content/inject.js": {
+      "statements": {
+        "total": 729,
+        "covered": 435
+      },
+      "branches": {
+        "total": 76,
+        "covered": 40
+      },
+      "functions": {
+        "total": 20,
+        "covered": 15
+      }
+    },
+    "src/content/injector.js": {
+      "statements": {
+        "total": 292,
+        "covered": 0
+      },
+      "branches": {
+        "total": 1,
+        "covered": 0
+      },
+      "functions": {
+        "total": 1,
+        "covered": 0
+      }
+    },
+    "src/core/action-handler.js": {
+      "statements": {
+        "total": 572,
+        "covered": 394
+      },
+      "branches": {
+        "total": 90,
+        "covered": 46
+      },
+      "functions": {
+        "total": 20,
+        "covered": 15
+      }
+    },
+    "src/core/gif-controller.js": {
+      "statements": {
+        "total": 870,
+        "covered": 332
+      },
+      "branches": {
+        "total": 74,
+        "covered": 48
+      },
+      "functions": {
+        "total": 17,
+        "covered": 5
+      }
+    },
+    "src/core/gif-frame-engine.js": {
+      "statements": {
+        "total": 48,
+        "covered": 47
+      },
+      "branches": {
+        "total": 11,
+        "covered": 9
+      },
+      "functions": {
+        "total": 5,
+        "covered": 4
+      }
+    },
+    "src/core/settings.js": {
+      "statements": {
+        "total": 337,
+        "covered": 221
+      },
+      "branches": {
+        "total": 45,
+        "covered": 33
+      },
+      "functions": {
+        "total": 14,
+        "covered": 13
+      }
+    },
+    "src/core/storage-manager.js": {
+      "statements": {
+        "total": 196,
+        "covered": 142
+      },
+      "branches": {
+        "total": 28,
+        "covered": 22
+      },
+      "functions": {
+        "total": 11,
+        "covered": 8
+      }
+    },
+    "src/core/video-controller.js": {
+      "statements": {
+        "total": 434,
+        "covered": 325
+      },
+      "branches": {
+        "total": 36,
+        "covered": 27
+      },
+      "functions": {
+        "total": 12,
+        "covered": 9
+      }
+    },
+    "src/observers/gif-observer.js": {
+      "statements": {
+        "total": 59,
+        "covered": 49
+      },
+      "branches": {
+        "total": 26,
+        "covered": 17
+      },
+      "functions": {
+        "total": 3,
+        "covered": 3
+      }
+    },
+    "src/observers/media-observer.js": {
+      "statements": {
+        "total": 294,
+        "covered": 234
+      },
+      "branches": {
+        "total": 35,
+        "covered": 25
+      },
+      "functions": {
+        "total": 11,
+        "covered": 10
+      }
+    },
+    "src/observers/mutation-observer.js": {
+      "statements": {
+        "total": 358,
+        "covered": 263
+      },
+      "branches": {
+        "total": 64,
+        "covered": 44
+      },
+      "functions": {
+        "total": 14,
+        "covered": 11
+      }
+    },
+    "src/site-handlers/amazon-handler.js": {
+      "statements": {
+        "total": 71,
+        "covered": 45
+      },
+      "branches": {
+        "total": 3,
+        "covered": 2
+      },
+      "functions": {
+        "total": 4,
+        "covered": 1
+      }
+    },
+    "src/site-handlers/apple-handler.js": {
+      "statements": {
+        "total": 60,
+        "covered": 40
+      },
+      "branches": {
+        "total": 3,
+        "covered": 2
+      },
+      "functions": {
+        "total": 4,
+        "covered": 1
+      }
+    },
+    "src/site-handlers/base-handler.js": {
+      "statements": {
+        "total": 96,
+        "covered": 89
+      },
+      "branches": {
+        "total": 10,
+        "covered": 8
+      },
+      "functions": {
+        "total": 9,
+        "covered": 7
+      }
+    },
+    "src/site-handlers/facebook-handler.js": {
+      "statements": {
+        "total": 146,
+        "covered": 65
+      },
+      "branches": {
+        "total": 3,
+        "covered": 2
+      },
+      "functions": {
+        "total": 8,
+        "covered": 1
+      }
+    },
+    "src/site-handlers/index.js": {
+      "statements": {
+        "total": 128,
+        "covered": 117
+      },
+      "branches": {
+        "total": 14,
+        "covered": 12
+      },
+      "functions": {
+        "total": 11,
+        "covered": 9
+      }
+    },
+    "src/site-handlers/netflix-handler.js": {
+      "statements": {
+        "total": 102,
+        "covered": 54
+      },
+      "branches": {
+        "total": 3,
+        "covered": 2
+      },
+      "functions": {
+        "total": 6,
+        "covered": 1
+      }
+    },
+    "src/site-handlers/youtube-handler.js": {
+      "statements": {
+        "total": 120,
+        "covered": 65
+      },
+      "branches": {
+        "total": 3,
+        "covered": 2
+      },
+      "functions": {
+        "total": 8,
+        "covered": 1
+      }
+    },
+    "src/site-handlers/scripts/netflix.js": {
+      "statements": {
+        "total": 7,
+        "covered": 0
+      },
+      "branches": {
+        "total": 1,
+        "covered": 0
+      },
+      "functions": {
+        "total": 1,
+        "covered": 0
+      }
+    },
+    "src/ui/controls.js": {
+      "statements": {
+        "total": 131,
+        "covered": 99
+      },
+      "branches": {
+        "total": 9,
+        "covered": 8
+      },
+      "functions": {
+        "total": 8,
+        "covered": 6
+      }
+    },
+    "src/ui/drag-handler.js": {
+      "statements": {
+        "total": 62,
+        "covered": 18
+      },
+      "branches": {
+        "total": 2,
+        "covered": 1
+      },
+      "functions": {
+        "total": 1,
+        "covered": 0
+      }
+    },
+    "src/ui/shadow-dom.js": {
+      "statements": {
+        "total": 248,
+        "covered": 237
+      },
+      "branches": {
+        "total": 12,
+        "covered": 6
+      },
+      "functions": {
+        "total": 7,
+        "covered": 3
+      }
+    },
+    "src/ui/options/options.js": {
+      "statements": {
+        "total": 657,
+        "covered": 0
+      },
+      "branches": {
+        "total": 1,
+        "covered": 0
+      },
+      "functions": {
+        "total": 1,
+        "covered": 0
+      }
+    },
+    "src/ui/popup/popup.js": {
+      "statements": {
+        "total": 184,
+        "covered": 0
+      },
+      "branches": {
+        "total": 1,
+        "covered": 0
+      },
+      "functions": {
+        "total": 1,
+        "covered": 0
+      }
+    },
+    "src/utils/constants.js": {
+      "statements": {
+        "total": 123,
+        "covered": 123
+      },
+      "branches": {
+        "total": 1,
+        "covered": 1
+      },
+      "functions": {
+        "total": 0,
+        "covered": 0
+      }
+    },
+    "src/utils/debug-helper.js": {
+      "statements": {
+        "total": 400,
+        "covered": 0
+      },
+      "branches": {
+        "total": 1,
+        "covered": 0
+      },
+      "functions": {
+        "total": 1,
+        "covered": 0
+      }
+    },
+    "src/utils/dom-utils.js": {
+      "statements": {
+        "total": 230,
+        "covered": 170
+      },
+      "branches": {
+        "total": 31,
+        "covered": 22
+      },
+      "functions": {
+        "total": 10,
+        "covered": 6
+      }
+    },
+    "src/utils/event-manager.js": {
+      "statements": {
+        "total": 323,
+        "covered": 231
+      },
+      "branches": {
+        "total": 49,
+        "covered": 31
+      },
+      "functions": {
+        "total": 14,
+        "covered": 10
+      }
+    },
+    "src/utils/logger.js": {
+      "statements": {
+        "total": 110,
+        "covered": 100
+      },
+      "branches": {
+        "total": 17,
+        "covered": 12
+      },
+      "functions": {
+        "total": 9,
+        "covered": 7
+      }
+    }
+  }
+}

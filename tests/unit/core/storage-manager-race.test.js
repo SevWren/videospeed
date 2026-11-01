@@ -37,6 +37,7 @@
 
 import { loadMinimalModules } from '../../helpers/module-loader.js';
 import { SimpleTestRunner, assert, wait } from '../../helpers/test-utils.js';
+import { installChromeMock, cleanupChromeMock } from '../../helpers/chrome-mock.js';
 
 // Modules write to window.VSC — load once for the suite.
 await loadMinimalModules();
@@ -321,6 +322,256 @@ runner.test(
       undefined,
       'Fix G: window.__VSC_injectedSettings must be deleted after consumption to prevent SPA stale-settings'
     );
+  }
+);
+
+// =============================================================================
+// Test 5 — StorageManager.get() fallback: returns injected settings when chrome
+// storage is unavailable (line 151 in storage-manager.js)
+//
+// When chrome.storage is not present and _injectedSettings has already been
+// set, get() must merge injected settings with the defaults and resolve.
+// =============================================================================
+
+runner.test(
+  'Test 5 — get() uses injected settings when chrome storage is unavailable',
+  async () => {
+    const SM = window.VSC.StorageManager;
+    resetStorageManager();
+
+    // Pre-set _injectedSettings (simulating a prior VSC_USER_SETTINGS event)
+    SM._injectedSettings = { lastSpeed: 3.0, rememberSpeed: true };
+
+    // Delete chrome so we fall into the non-chrome branch (lines 56-64)
+    const savedChrome = globalThis.chrome;
+    delete globalThis.chrome;
+
+    let result;
+    try {
+      result = await SM.get({ lastSpeed: 1.0, rememberSpeed: false, enabled: true });
+    } finally {
+      globalThis.chrome = savedChrome;
+      SM._injectedSettings = null;
+    }
+
+    assert.equal(result.lastSpeed, 3.0, 'get() must return injected lastSpeed 3.0');
+    assert.equal(result.rememberSpeed, true, 'get() must return injected rememberSpeed true');
+    // Default for enabled was not overridden by injected settings
+    assert.equal(result.enabled, true, 'get() must preserve default for keys not in injected settings');
+  }
+);
+
+// =============================================================================
+// Test 6 — StorageManager.get() fallback: returns defaults when no chrome and
+// no injected settings (confirming the else branch on line 62-63)
+// =============================================================================
+
+runner.test(
+  'Test 6 — get() returns defaults when chrome is unavailable and no injected settings',
+  async () => {
+    const SM = window.VSC.StorageManager;
+    resetStorageManager();
+
+    const savedChrome = globalThis.chrome;
+    delete globalThis.chrome;
+
+    let result;
+    try {
+      result = await SM.get({ lastSpeed: 1.0, enabled: true });
+    } finally {
+      globalThis.chrome = savedChrome;
+    }
+
+    assert.equal(result.lastSpeed, 1.0, 'get() must return default lastSpeed 1.0');
+    assert.equal(result.enabled, true, 'get() must return default enabled true');
+  }
+);
+
+// =============================================================================
+// Test 7 — StorageManager.remove() calls chrome.storage.sync.remove (lines 160-166)
+//
+// When chrome storage is available, remove() must resolve after the chrome API
+// callback fires.
+// =============================================================================
+
+runner.test(
+  'Test 7 — remove() resolves after chrome.storage.sync.remove callback fires',
+  async () => {
+    const SM = window.VSC.StorageManager;
+    resetStorageManager();
+
+    // Install a minimal chrome mock that has storage.sync.remove
+    const originalChrome = globalThis.chrome;
+    let removedKeys = null;
+    globalThis.chrome = {
+      storage: {
+        sync: {
+          remove: (keys, callback) => {
+            removedKeys = keys;
+            setTimeout(() => callback && callback(), 5);
+          },
+        },
+      },
+    };
+
+    try {
+      await SM.remove(['lastSpeed', 'keyBindings']);
+    } finally {
+      globalThis.chrome = originalChrome;
+    }
+
+    assert.deepEqual(
+      removedKeys,
+      ['lastSpeed', 'keyBindings'],
+      'remove() must pass the keys array to chrome.storage.sync.remove'
+    );
+  }
+);
+
+// =============================================================================
+// Test 8 — StorageManager.clear() calls chrome.storage.sync.clear (lines 173-179)
+// =============================================================================
+
+runner.test(
+  'Test 8 — clear() resolves after chrome.storage.sync.clear callback fires',
+  async () => {
+    const SM = window.VSC.StorageManager;
+    resetStorageManager();
+
+    let clearCalled = false;
+    const originalChrome = globalThis.chrome;
+    globalThis.chrome = {
+      storage: {
+        sync: {
+          clear: (callback) => {
+            clearCalled = true;
+            setTimeout(() => callback && callback(), 5);
+          },
+        },
+      },
+    };
+
+    try {
+      await SM.clear();
+    } finally {
+      globalThis.chrome = originalChrome;
+    }
+
+    assert.equal(clearCalled, true, 'clear() must call chrome.storage.sync.clear');
+  }
+);
+
+// =============================================================================
+// Test 9 — StorageManager.onChanged() registers a listener and receives changes
+// (lines 186-191)
+// =============================================================================
+
+runner.test(
+  'Test 9 — onChanged() registers listener; callback fires on sync storage change',
+  () => {
+    const SM = window.VSC.StorageManager;
+    resetStorageManager();
+
+    let receivedChanges = null;
+
+    // chrome-mock already has onChanged.addListener and triggerStorageChange
+    installChromeMock();
+
+    try {
+      SM.onChanged((changes) => {
+        receivedChanges = changes;
+      });
+
+      // Trigger a sync change through the mock
+      globalThis.chrome.storage.onChanged.triggerStorageChange(
+        { lastSpeed: { oldValue: 1.0, newValue: 2.5 } },
+        'sync'
+      );
+    } finally {
+      cleanupChromeMock();
+    }
+
+    assert.exists(receivedChanges, 'onChanged callback must have been called');
+    assert.exists(
+      receivedChanges.lastSpeed,
+      'onChanged callback must receive the lastSpeed change'
+    );
+  }
+);
+
+// =============================================================================
+// Test 10 — StorageManager.onChanged() does NOT fire callback for non-sync areas
+// (line 187-189: the areaName === 'sync' guard)
+// =============================================================================
+
+runner.test(
+  'Test 10 — onChanged() callback is not invoked for non-sync storage changes',
+  () => {
+    const SM = window.VSC.StorageManager;
+    resetStorageManager();
+
+    let callbackFired = false;
+    installChromeMock();
+
+    try {
+      SM.onChanged(() => {
+        callbackFired = true;
+      });
+
+      // Trigger a 'local' (not 'sync') change — must NOT invoke callback
+      globalThis.chrome.storage.onChanged.triggerStorageChange(
+        { lastSpeed: { oldValue: 1.0, newValue: 2.5 } },
+        'local'
+      );
+    } finally {
+      cleanupChromeMock();
+    }
+
+    assert.equal(
+      callbackFired,
+      false,
+      'onChanged callback must not fire for non-sync storage area'
+    );
+  }
+);
+
+// =============================================================================
+// Test 11 — StorageManager.set() fallback: updates _injectedSettings cache
+// and dispatches VSC_SAVE_SETTINGS (line 148 — the cache update branch)
+// =============================================================================
+
+runner.test(
+  'Test 11 — set() in non-chrome context updates _injectedSettings cache',
+  async () => {
+    const SM = window.VSC.StorageManager;
+    resetStorageManager();
+    SM._injectedSettings = { lastSpeed: 1.0 };
+
+    const savedChrome = globalThis.chrome;
+    delete globalThis.chrome;
+
+    let saveEventFired = false;
+    const saveHandler = () => { saveEventFired = true; };
+    window.addEventListener('VSC_SAVE_SETTINGS', saveHandler);
+
+    try {
+      await SM.set({ lastSpeed: 2.5, rememberSpeed: true });
+    } finally {
+      globalThis.chrome = savedChrome;
+      window.removeEventListener('VSC_SAVE_SETTINGS', saveHandler);
+    }
+
+    assert.equal(
+      SM._injectedSettings.lastSpeed,
+      2.5,
+      'set() must update _injectedSettings.lastSpeed to 2.5'
+    );
+    assert.equal(
+      SM._injectedSettings.rememberSpeed,
+      true,
+      'set() must merge new keys into _injectedSettings'
+    );
+    assert.equal(saveEventFired, true, 'set() must dispatch VSC_SAVE_SETTINGS event');
   }
 );
 

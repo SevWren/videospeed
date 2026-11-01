@@ -226,4 +226,279 @@ runner.test('Display toggle should work with audio controllers', async () => {
   document.body.removeChild(smallAudio);
 });
 
-export default runner; 
+// --- MediaElementObserver.scanForGifs: GifObserver absent returns empty array (lines 256-257) ---
+
+runner.test('scanForGifs returns [] when window.VSC.GifObserver is absent', async () => {
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  const siteHandler = new window.VSC.BaseSiteHandler();
+  const observer = new window.VSC.MediaElementObserver(config, siteHandler);
+
+  // Temporarily remove GifObserver to exercise the early-return branch
+  const saved = window.VSC.GifObserver;
+  delete window.VSC.GifObserver;
+
+  try {
+    const results = observer.scanForGifs(document);
+    assert.true(Array.isArray(results), 'scanForGifs should return an array');
+    assert.true(results.length === 0, 'scanForGifs should return [] when GifObserver is absent');
+  } finally {
+    // Always restore (even if it was undefined before)
+    if (saved !== undefined) {
+      window.VSC.GifObserver = saved;
+    }
+  }
+});
+
+// --- MediaElementObserver.scanForGifs: filter exercises size-check branch (lines 262-278) ---
+// These tests require GifObserver to be loaded. Load it on demand and restore after.
+
+async function ensureGifObserver() {
+  if (!window.VSC.GifObserver) {
+    await import('../../../src/observers/gif-observer.js');
+  }
+}
+
+runner.test('scanForGifs excludes img with gifController already set (line 262-263 branch)', async () => {
+  await ensureGifObserver();
+
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  const siteHandler = new window.VSC.BaseSiteHandler();
+  const observer = new window.VSC.MediaElementObserver(config, siteHandler);
+
+  const img = document.createElement('img');
+  img.src = 'https://example.com/anim.gif';
+  img.gifController = {}; // triggers the early-exit filter branch
+  document.body.appendChild(img);
+
+  const results = observer.scanForGifs(document);
+  document.body.removeChild(img);
+
+  assert.false(results.includes(img), 'scanForGifs should exclude img with gifController set');
+});
+
+runner.test('scanForGifs excludes non-gif img (exercises !isGifElement branch lines 265-267)', async () => {
+  await ensureGifObserver();
+
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  const siteHandler = new window.VSC.BaseSiteHandler();
+  const observer = new window.VSC.MediaElementObserver(config, siteHandler);
+
+  const img = document.createElement('img');
+  img.src = 'https://example.com/photo.png'; // not a gif
+  document.body.appendChild(img);
+
+  const results = observer.scanForGifs(document);
+  document.body.removeChild(img);
+
+  assert.false(results.includes(img), 'scanForGifs should exclude non-gif img elements');
+});
+
+runner.test('scanForGifs includes gif with known dimensions above minimum size (lines 271-277)', async () => {
+  await ensureGifObserver();
+
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  const siteHandler = new window.VSC.BaseSiteHandler();
+  const observer = new window.VSC.MediaElementObserver(config, siteHandler);
+
+  const img = document.createElement('img');
+  img.src = 'https://example.com/anim.gif';
+  // naturalWidth/Height > 0 means the size-filter branch is taken
+  Object.defineProperty(img, 'naturalWidth', { value: 50, configurable: true });
+  Object.defineProperty(img, 'naturalHeight', { value: 50, configurable: true });
+  document.body.appendChild(img);
+
+  const results = observer.scanForGifs(document);
+  document.body.removeChild(img);
+
+  assert.true(results.includes(img), 'scanForGifs should include 50x50 gif (above GIF_MIN_SIZE_PX)');
+});
+
+runner.test('scanForGifs excludes gif with known dimensions below minimum size (lines 271-276 false branch)', async () => {
+  await ensureGifObserver();
+
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  const siteHandler = new window.VSC.BaseSiteHandler();
+  const observer = new window.VSC.MediaElementObserver(config, siteHandler);
+
+  const img = document.createElement('img');
+  img.src = 'https://example.com/tiny.gif';
+  // Below GIF_MIN_SIZE_PX (which is typically 16px)
+  Object.defineProperty(img, 'naturalWidth', { value: 1, configurable: true });
+  Object.defineProperty(img, 'naturalHeight', { value: 1, configurable: true });
+  document.body.appendChild(img);
+
+  const results = observer.scanForGifs(document);
+  document.body.removeChild(img);
+
+  assert.false(results.includes(img), 'scanForGifs should exclude 1x1 gif (below GIF_MIN_SIZE_PX)');
+});
+
+// --- MediaElementObserver.findControllerParent (lines 288-290) ---
+
+runner.test('findControllerParent returns site-handler targetParent when provided (lines 288-290)', async () => {
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  const customParent = document.createElement('div');
+  const video = document.createElement('video');
+  const defaultParent = document.createElement('div');
+  defaultParent.appendChild(video);
+  document.body.appendChild(defaultParent);
+  document.body.appendChild(customParent);
+
+  // Create a site handler stub that returns a specific targetParent
+  const siteHandlerStub = {
+    getControllerPosition: (_parent, _media) => ({ targetParent: customParent }),
+    detectSpecialVideos: () => [],
+    shouldIgnoreVideo: () => false,
+    getVideoContainerSelectors: () => [],
+  };
+
+  const observer = new window.VSC.MediaElementObserver(config, siteHandlerStub);
+  const result = observer.findControllerParent(video);
+
+  document.body.removeChild(defaultParent);
+  document.body.removeChild(customParent);
+
+  assert.true(result === customParent, 'findControllerParent should return targetParent from site handler');
+});
+
+runner.test('findControllerParent falls back to media.parentElement when targetParent is null (line 289)', async () => {
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  const video = document.createElement('video');
+  const parentDiv = document.createElement('div');
+  parentDiv.appendChild(video);
+  document.body.appendChild(parentDiv);
+
+  // Site handler returns no targetParent — null/undefined
+  const siteHandlerStub = {
+    getControllerPosition: (_parent, _media) => ({ targetParent: null }),
+    detectSpecialVideos: () => [],
+    shouldIgnoreVideo: () => false,
+    getVideoContainerSelectors: () => [],
+  };
+
+  const observer = new window.VSC.MediaElementObserver(config, siteHandlerStub);
+  const result = observer.findControllerParent(video);
+
+  document.body.removeChild(parentDiv);
+
+  assert.true(result === parentDiv, 'findControllerParent should fall back to media.parentElement');
+});
+
+// --- shouldStartHidden: hidden video branch (lines 241-243) ---
+
+runner.test('shouldStartHidden returns true for video with display:none (lines 241-243)', async () => {
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  const siteHandler = new window.VSC.BaseSiteHandler();
+  const observer = new window.VSC.MediaElementObserver(config, siteHandler);
+
+  const video = document.createElement('video');
+  video.style.display = 'none';
+  document.body.appendChild(video);
+
+  const result = observer.shouldStartHidden(video);
+  document.body.removeChild(video);
+
+  assert.true(result, 'shouldStartHidden should return true for display:none video');
+});
+
+// --- isValidMediaElement: siteHandler.shouldIgnoreVideo returns true → return false (lines 201-203) ---
+
+runner.test('isValidMediaElement returns false when siteHandler.shouldIgnoreVideo returns true (lines 201-203)', async () => {
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  // Stub site handler that ignores all videos
+  const siteHandlerStub = {
+    shouldIgnoreVideo: () => true,
+    detectSpecialVideos: () => [],
+    getVideoContainerSelectors: () => [],
+    getControllerPosition: () => ({ targetParent: null }),
+  };
+
+  const observer = new window.VSC.MediaElementObserver(config, siteHandlerStub);
+
+  const video = document.createElement('video');
+  Object.defineProperty(video, 'isConnected', { value: true, configurable: true });
+  document.body.appendChild(video);
+
+  const result = observer.isValidMediaElement(video);
+  document.body.removeChild(video);
+
+  assert.false(result, 'isValidMediaElement should return false when siteHandler ignores the video');
+});
+
+// --- shouldStartHidden: audio with audioBoolean=false returns true (lines 220-222) ---
+
+runner.test('shouldStartHidden returns true for audio when audioBoolean is disabled (lines 220-222)', async () => {
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+  config.settings.audioBoolean = false;
+
+  const siteHandler = new window.VSC.BaseSiteHandler();
+  const observer = new window.VSC.MediaElementObserver(config, siteHandler);
+
+  const audio = createMockAudio();
+  const result = observer.shouldStartHidden(audio);
+
+  assert.true(result, 'shouldStartHidden should return true for audio when audioBoolean is false');
+
+  // Restore
+  config.settings.audioBoolean = true;
+});
+
+// --- shouldStartHidden: audio.disabled → return true (lines 227-229) ---
+
+runner.test('shouldStartHidden returns true for disabled audio element (lines 227-229)', async () => {
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+  config.settings.audioBoolean = true;
+
+  const siteHandler = new window.VSC.BaseSiteHandler();
+  const observer = new window.VSC.MediaElementObserver(config, siteHandler);
+
+  const audio = createMockAudio();
+  Object.defineProperty(audio, 'disabled', { value: true, configurable: true });
+  const result = observer.shouldStartHidden(audio);
+
+  assert.true(result, 'shouldStartHidden should return true for disabled audio element');
+});
+
+// --- scanForGifs: img with naturalWidth=0 passes through (line 278 return true) ---
+
+runner.test('scanForGifs includes gif with naturalWidth=0 (unknown size, line 278 return true)', async () => {
+  await ensureGifObserver();
+
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  const siteHandler = new window.VSC.BaseSiteHandler();
+  const observer = new window.VSC.MediaElementObserver(config, siteHandler);
+
+  const img = document.createElement('img');
+  img.src = 'https://example.com/anim.gif';
+  // naturalWidth defaults to 0 in JSDOM for unloaded images — exercises the return true path
+  document.body.appendChild(img);
+
+  const results = observer.scanForGifs(document);
+  document.body.removeChild(img);
+
+  assert.true(results.includes(img), 'scanForGifs should pass through gif with naturalWidth=0 (not yet loaded)');
+});
+
+export default runner;

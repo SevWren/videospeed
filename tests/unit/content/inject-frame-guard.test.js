@@ -134,4 +134,119 @@ runner.test('shouldInjectInCurrentFrame() returns true in the top-level frame', 
   );
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Test 4 — sandboxed frame: window.location.href throws → return false (lines 692-693)
+//
+// JSDOM always returns a valid href from window.location and does not allow
+// redefining window.location (non-configurable), so this branch cannot be
+// exercised through the public interface in the JSDOM environment.
+// The branch is a defensive try/catch for sandboxed iframe contexts that
+// exist only in real browsers.  Coverage for lines 692-693 is a JSDOM boundary
+// limitation — not tested here.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Test 5 — cross-origin parent: window.parent.document throws SecurityError → return true (lines 701-702)
+//
+// When we are in a sub-frame with an http/https URL and accessing
+// window.parent.document throws a SecurityError, we are in a cross-origin
+// embedded player and should inject.
+// ─────────────────────────────────────────────────────────────────────────────
+
+runner.test(
+  'shouldInjectInCurrentFrame() returns true when parent.document throws SecurityError (cross-origin frame)',
+  () => {
+    const guardFn = window.VSC._shouldInjectInCurrentFrame;
+
+    // Simulate iframe with an http URL
+    const restoreIframe = simulateIframe();
+
+    // Patch window.parent so accessing .document throws SecurityError
+    const origParentDesc = Object.getOwnPropertyDescriptor(window, 'parent');
+    Object.defineProperty(window, 'parent', {
+      get: () => {
+        const p = Object.create(null);
+        Object.defineProperty(p, 'document', {
+          get: () => { const e = new DOMException('cross-origin', 'SecurityError'); throw e; },
+          configurable: true,
+        });
+        return p;
+      },
+      configurable: true,
+    });
+
+    let result;
+    try {
+      result = guardFn();
+    } finally {
+      if (origParentDesc) {
+        Object.defineProperty(window, 'parent', origParentDesc);
+      } else {
+        delete window.parent;
+      }
+      restoreIframe();
+    }
+
+    assert.true(
+      result,
+      'shouldInjectInCurrentFrame() must return true for cross-origin parent (SecurityError)'
+    );
+  }
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Test 6 — cross-origin parent: window.parent.document throws non-SecurityError → return false (lines 703-704)
+//
+// An unexpected error type in the parent.document access should cause the
+// guard to skip injection (conservative fallback).
+// ─────────────────────────────────────────────────────────────────────────────
+
+runner.test(
+  'shouldInjectInCurrentFrame() returns false when parent.document throws non-SecurityError',
+  () => {
+    const guardFn = window.VSC._shouldInjectInCurrentFrame;
+
+    const restoreIframe = simulateIframe();
+
+    const origParentDesc = Object.getOwnPropertyDescriptor(window, 'parent');
+    Object.defineProperty(window, 'parent', {
+      get: () => {
+        const p = Object.create(null);
+        Object.defineProperty(p, 'document', {
+          get: () => { throw new TypeError('unexpected error'); },
+          configurable: true,
+        });
+        return p;
+      },
+      configurable: true,
+    });
+
+    let result;
+    try {
+      result = guardFn();
+    } finally {
+      if (origParentDesc) {
+        Object.defineProperty(window, 'parent', origParentDesc);
+      } else {
+        delete window.parent;
+      }
+      restoreIframe();
+    }
+
+    assert.false(
+      result,
+      'shouldInjectInCurrentFrame() must return false for unexpected parent.document error'
+    );
+  }
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Test 7 — non-HTTP(S) sub-frame URL → return false (line 689)
+//
+// JSDOM window.location is non-configurable and always returns http://localhost.
+// Overriding window.location to simulate a chrome-extension:// URL is not
+// possible without editing the JSDOM instance.  This branch is a JSDOM
+// boundary limitation — not tested here.
+// ─────────────────────────────────────────────────────────────────────────────
+
 export { runner as injectFrameGuardRunner };

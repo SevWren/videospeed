@@ -73,7 +73,29 @@ Object.assign(global, {
   KeyboardEvent: dom.window.KeyboardEvent,
   CustomEvent: dom.window.CustomEvent,
   MutationObserver: dom.window.MutationObserver,
-  requestIdleCallback: (fn) => setTimeout(fn, 0),
+  MouseEvent: dom.window.MouseEvent,
+  WheelEvent: dom.window.WheelEvent,
+  HTMLMediaElement: dom.window.HTMLMediaElement,
+  requestIdleCallback: (() => {
+    const _idleTimers = new Map();
+    let _idleNextId = 1;
+    global._cancelAllIdleCallbacks = () => {
+      _idleTimers.forEach((tid) => clearTimeout(tid));
+      _idleTimers.clear();
+    };
+    global.cancelIdleCallback = (id) => {
+      if (_idleTimers.has(id)) {
+        clearTimeout(_idleTimers.get(id));
+        _idleTimers.delete(id);
+      }
+    };
+    return (fn) => {
+      const id = _idleNextId++;
+      const tid = setTimeout(() => { _idleTimers.delete(id); fn({ timeRemaining: () => 50 }); }, 0);
+      _idleTimers.set(id, tid);
+      return id;
+    };
+  })(),
   location: { hostname: 'localhost', href: 'http://localhost' }
 });
 
@@ -185,6 +207,17 @@ async function runTests() {
       'unit/manifest/permissions.test.js',
       'unit/manifest/module-loader-dead-code.test.js',
       'unit/core/storage-manager-race.test.js',
+      'unit/ui/drag-handler.test.js',
+      'unit/ui/controls.test.js',
+      'unit/ui/shadow-dom.test.js',
+      'unit/site-handlers/youtube-handler.test.js',
+      'unit/site-handlers/netflix-handler.test.js',
+      'unit/site-handlers/amazon-handler.test.js',
+      'unit/site-handlers/apple-handler.test.js',
+      'unit/site-handlers/facebook-handler.test.js',
+      'unit/utils/dom-utils.test.js',
+      'unit/utils/debug-helper.test.js',
+      'unit/utils/logger.test.js',
     ];
   } else if (testType === 'integration') {
     testFiles = [
@@ -217,6 +250,17 @@ async function runTests() {
       'unit/manifest/permissions.test.js',
       'unit/manifest/module-loader-dead-code.test.js',
       'unit/core/storage-manager-race.test.js',
+      'unit/ui/drag-handler.test.js',
+      'unit/ui/controls.test.js',
+      'unit/ui/shadow-dom.test.js',
+      'unit/site-handlers/youtube-handler.test.js',
+      'unit/site-handlers/netflix-handler.test.js',
+      'unit/site-handlers/amazon-handler.test.js',
+      'unit/site-handlers/apple-handler.test.js',
+      'unit/site-handlers/facebook-handler.test.js',
+      'unit/utils/dom-utils.test.js',
+      'unit/utils/debug-helper.test.js',
+      'unit/utils/logger.test.js',
       'integration/module-integration.test.js',
       'integration/gif-integration.test.js',
     ];
@@ -247,6 +291,11 @@ async function runTests() {
         console.log(`   ${status} ${results.passed} passed, ${results.failed} failed\n`);
       } else {
         console.log(`   ⚠️  No test runner found in ${testFile}\n`);
+      }
+      // Cancel any pending requestIdleCallback timers that leaked from this
+      // test file so they cannot fire into the next file's async windows.
+      if (typeof global._cancelAllIdleCallbacks === 'function') {
+        global._cancelAllIdleCallbacks();
       }
     } catch (error) {
       console.log(`   💥 Error running ${testFile}:`);

@@ -326,4 +326,87 @@ runner.test('Should find all media elements across many parallel nested shadow r
   assert.equal(results.length, 10);
 });
 
+// ---------------------------------------------------------------------------
+// T-actions-utils: cover dom-utils.js lines 47, 154-159, 174-175, 182-183
+// ---------------------------------------------------------------------------
+
+runner.test('DomUtils.isBlacklisted ignores empty regex pattern body (line 47 guard)', () => {
+  // "//" splits into ['', '', ''] — the regex body slice is '' (falsy) →
+  // triggers the `if (!regex) { return; }` guard on line 47.
+  const result = window.VSC.DomUtils.isBlacklisted('//');
+  assert.false(result, 'empty regex pattern "//" must not blacklist the page');
+});
+
+runner.test('DomUtils.isBlacklisted ignores malformed regex that throws (catch block)', () => {
+  // "[invalid" is an invalid character class — triggers the catch block.
+  const result = window.VSC.DomUtils.isBlacklisted('/[invalid/g');
+  assert.false(result, 'malformed regex must not blacklist the page');
+});
+
+runner.test('DomUtils.initializeWhenReady calls callback via onreadystatechange when not yet complete', () => {
+  let callCount = 0;
+  const callback = () => callCount++;
+
+  let readyState = 'loading';
+  let storedHandler = null;
+  const fakeDoc = {
+    get readyState() { return readyState; },
+    set onreadystatechange(fn) { storedHandler = fn; },
+  };
+
+  window.VSC.DomUtils.initializeWhenReady(fakeDoc, callback);
+
+  // callback must not have fired yet — document is still loading
+  assert.equal(callCount, 0, 'callback must not fire before readyState is complete');
+
+  // Simulate readyState transition
+  readyState = 'complete';
+  storedHandler && storedHandler();
+
+  assert.equal(callCount, 1, 'callback must fire once when readyState changes to complete');
+});
+
+runner.test('DomUtils.initializeWhenReady calls callback immediately when document is already complete', () => {
+  let callCount = 0;
+  const fakeDoc = { readyState: 'complete' };
+
+  window.VSC.DomUtils.initializeWhenReady(fakeDoc, () => callCount++);
+
+  assert.equal(callCount, 1, 'callback must be invoked immediately when readyState is already complete');
+});
+
+runner.test('DomUtils.findMediaElements returns empty array for null node (lines 174-175 early return)', () => {
+  // When node is null, the function should return early with [] on lines 174-175.
+  const results = window.VSC.DomUtils.findMediaElements(null);
+
+  assert.equal(results.length, 0, 'findMediaElements must return empty array for null node');
+});
+
+runner.test('DomUtils.findMediaElements includes the video node itself when it matches selector (lines 181-182)', () => {
+  // Pass a video element directly as `node` — node.matches('video') returns true
+  // so it is pushed to mediaElements on lines 181-182.
+  const video = document.createElement('video');
+
+  const results = window.VSC.DomUtils.findMediaElements(video, false);
+
+  assert.equal(results.length >= 1, true, 'findMediaElements must include the node itself when it is a video');
+  assert.equal(results[0], video, 'the first element must be the video node itself');
+});
+
+runner.test('DomUtils.findMediaElements finds media inside node shadow root (lines 182-183)', () => {
+  // The host element has a shadowRoot with a video inside.
+  // Lines 182-183: `if (node.shadowRoot)` → calls findShadowMedia.
+  const host = document.createElement('div');
+  document.body.appendChild(host);
+  const shadow = host.attachShadow({ mode: 'open' });
+  const video = document.createElement('video');
+  shadow.appendChild(video);
+
+  const results = window.VSC.DomUtils.findMediaElements(host, false);
+
+  assert.equal(results.includes(video), true, 'findMediaElements must traverse shadow root and find contained video');
+
+  document.body.removeChild(host);
+});
+
 export { runner as recursiveShadowDOMTestRunner };

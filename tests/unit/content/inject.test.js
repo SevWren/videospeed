@@ -38,7 +38,23 @@ runner.afterEach(() => {
   if (mockDOM) {
     mockDOM.cleanup();
   }
+
+  // Stop the mutation observer on any initialized extension to prevent
+  // async processMutations callbacks from leaking into later test suites.
+  if (extension) {
+    try { extension.cleanup(); } catch (_e) { /* ignore */ }
+  }
   extension = null;
+
+  // Stop the module-level singleton's mutation observer so it does not
+  // fire against DOM mutations made by later test suites.
+  const moduleExt = window.videoSpeedExtension;
+  if (moduleExt && moduleExt.mutationObserver) {
+    try { moduleExt.mutationObserver.stop(); } catch (_e) { /* ignore */ }
+  }
+  if (moduleExt) {
+    moduleExt.initialized = false;
+  }
 
   // Remove any video elements left behind by Seam A tests.
   document.querySelectorAll('video').forEach((video) => {

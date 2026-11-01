@@ -65,6 +65,21 @@ function validateExtension() {
       manifest.content_scripts[0].matches &&
         manifest.content_scripts[0].matches.includes('https://*/*')
     );
+
+    // Path B assertions
+    test(
+      'Content scripts has world:MAIN entry',
+      manifest.content_scripts && manifest.content_scripts.some((cs) => cs.world === 'MAIN')
+    );
+    test(
+      'minimum_chrome_version is 111 or higher',
+      manifest.minimum_chrome_version &&
+        parseInt(manifest.minimum_chrome_version, 10) >= 111
+    );
+    test(
+      '"scripting" permission is absent',
+      !manifest.permissions || !manifest.permissions.includes('scripting')
+    );
   } catch (error) {
     test('Manifest.json is valid JSON', false, error.message);
   }

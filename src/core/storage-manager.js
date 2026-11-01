@@ -25,12 +25,14 @@ if (!window.VSC.StorageManager) {
 
     // Remove the VSC_USER_SETTINGS listener — called by tests to prevent stale
     // listeners from persisting across test cases in a shared JSDOM environment.
+    // Also resets _injectedSettings to null so each test starts from a clean slate.
     static _teardownSettingsListener() {
       if (this._settingsListener) {
         window.removeEventListener('VSC_USER_SETTINGS', this._settingsListener);
         this._settingsListener = null;
       }
       this._listenerSetup = false;
+      this._injectedSettings = null;
     }
     /**
      * Get settings from Chrome storage

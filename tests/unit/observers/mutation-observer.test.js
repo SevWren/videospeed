@@ -45,7 +45,7 @@ runner.test('VideoMutationObserver should process element nodes', () => {
     target: document.body
   };
 
-  observer.processChildListMutation(mutation);
+  observer.processMutations([mutation]);
 
   // Video element should trigger callback
   assert.equal(mockOnVideoFound.length, 1);
@@ -83,7 +83,7 @@ runner.test('VideoMutationObserver should skip non-element nodes', () => {
     target: document.body
   };
 
-  observer.processChildListMutation(mutation);
+  observer.processMutations([mutation]);
 
   // Only video element should be processed
   assert.equal(mockOnVideoFound.length, 1);
@@ -120,7 +120,7 @@ runner.test('VideoMutationObserver should handle removed video elements', () => 
     target: document.body
   };
 
-  observer.processChildListMutation(mutation);
+  observer.processMutations([mutation]);
 
   assert.equal(mockOnVideoRemoved.length, 1);
   assert.equal(mockOnVideoRemoved[0], videoElement);
@@ -153,7 +153,7 @@ runner.test('VideoMutationObserver should handle null and undefined nodes gracef
   };
 
   // Should not throw
-  observer.processChildListMutation(mutation);
+  observer.processMutations([mutation]);
 
   // Only the video element should be processed
   assert.equal(mockOnVideoFound.length, 1);
@@ -184,7 +184,14 @@ runner.test('VideoMutationObserver should detect video elements in shadow DOM', 
   const videoElement = document.createElement('video');
   shadowRoot.appendChild(videoElement);
 
-  observer.checkForVideoAndShadowRoot(host, document.body, true);
+  const mutation = {
+    type: 'childList',
+    addedNodes: [host],
+    removedNodes: [],
+    target: document.body,
+  };
+
+  observer.processMutations([mutation]);
 
   assert.equal(mockOnVideoFound.length, 1);
   assert.equal(mockOnVideoFound[0].video, videoElement);
@@ -216,7 +223,14 @@ runner.test('VideoMutationObserver should detect nested video elements', () => {
   innerDiv.appendChild(videoElement);
   container.appendChild(innerDiv);
 
-  observer.checkForVideoAndShadowRoot(container, document.body, true);
+  const mutation = {
+    type: 'childList',
+    addedNodes: [container],
+    removedNodes: [],
+    target: document.body,
+  };
+
+  observer.processMutations([mutation]);
 
   assert.equal(mockOnVideoFound.length, 1);
   assert.equal(mockOnVideoFound[0].video, videoElement);

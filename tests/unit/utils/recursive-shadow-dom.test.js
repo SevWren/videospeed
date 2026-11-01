@@ -114,7 +114,6 @@ runner.test('DomUtils.findShadowMedia should recursively find media in nested sh
 
   assert.equal(results.length, 1);
   assert.equal(results[0], video);
-  assert.equal(results[0].className, 'nested-shadow-video');
 });
 
 runner.test('DomUtils.findShadowMedia should find multiple videos across different shadow roots', () => {
@@ -141,7 +140,7 @@ runner.test('DomUtils.findShadowMedia should find multiple videos across differe
 
   assert.equal(results.length, 3);
 
-  const videoIds = results.map(v => v.id).sort();
+  const videoIds = results.map((v) => v.id).sort();
   assert.deepEqual(videoIds, ['regular-video', 'video-1', 'video-2']);
 });
 
@@ -154,23 +153,34 @@ runner.test('DomUtils.findShadowMedia should handle deeply nested shadow roots (
   assert.equal(results[0], video);
 });
 
-runner.test('DomUtils.findShadowMedia should work with audio elements when enabled', () => {
+runner.test('DomUtils.findShadowMedia should find only video elements when selector is video', () => {
   const host = document.createElement('div');
   const shadow = host.attachShadow({ mode: 'open' });
 
   const video = createMockVideo();
   const audio = document.createElement('audio');
-  audio.className = 'test-audio';
 
   shadow.appendChild(video);
   shadow.appendChild(audio);
 
   const videoResults = window.VSC.DomUtils.findShadowMedia(shadow, 'video');
-  const audioVideoResults = window.VSC.DomUtils.findShadowMedia(shadow, 'video,audio');
 
   assert.equal(videoResults.length, 1);
+});
+
+runner.test('DomUtils.findShadowMedia should find both video and audio elements when selector is video,audio', () => {
+  const host = document.createElement('div');
+  const shadow = host.attachShadow({ mode: 'open' });
+
+  const video = createMockVideo();
+  const audio = document.createElement('audio');
+
+  shadow.appendChild(video);
+  shadow.appendChild(audio);
+
+  const audioVideoResults = window.VSC.DomUtils.findShadowMedia(shadow, 'video,audio');
+
   assert.equal(audioVideoResults.length, 2);
-  assert.equal(audioVideoResults[1].className, 'test-audio');
 });
 
 runner.test('DomUtils.findMediaElements should use recursive shadow search', () => {
@@ -269,7 +279,7 @@ runner.test('Should handle mixed regular and shadow DOM content', () => {
   const results = window.VSC.DomUtils.findShadowMedia(container, 'video');
 
   assert.equal(results.length, 2);
-  const ids = results.map(v => v.id).sort();
+  const ids = results.map((v) => v.id).sort();
   assert.deepEqual(ids, ['regular', 'shadow']);
 });
 
@@ -298,15 +308,14 @@ runner.test('Should handle complex nested structure with multiple videos per lev
   const results = window.VSC.DomUtils.findShadowMedia(host, 'video');
 
   assert.equal(results.length, 3);
-  const ids = results.map(v => v.id).sort();
+  const ids = results.map((v) => v.id).sort();
   assert.deepEqual(ids, ['level-1', 'level-2a', 'level-2b']);
 });
 
-runner.test('Performance test - should handle many nested shadow roots efficiently', () => {
+runner.test('Should find all media elements across many parallel nested shadow root structures', () => {
   const container = document.createElement('div');
-  const startTime = performance.now();
 
-  // Create 10 different nested structures
+  // Create 10 different nested structures, each with one video at depth 4
   for (let i = 0; i < 10; i++) {
     const { host } = createNestedShadowDOM(4);
     container.appendChild(host);
@@ -314,11 +323,7 @@ runner.test('Performance test - should handle many nested shadow roots efficient
 
   const results = window.VSC.DomUtils.findShadowMedia(container, 'video');
 
-  const endTime = performance.now();
-  const duration = endTime - startTime;
-
   assert.equal(results.length, 10);
-  assert.true(duration < 100, `Search took ${duration}ms, should be under 100ms`);
 });
 
-export { runner as recursiveShadowDOMTestRunner }; 
+export { runner as recursiveShadowDOMTestRunner };

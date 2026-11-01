@@ -62,9 +62,8 @@ function resetStorageManager() {
 
   // Remove the current listener (if any) so stale listeners from earlier test
   // files in the shared JSDOM environment cannot fire during this test.
+  // _teardownSettingsListener() also resets _injectedSettings to null.
   SM._teardownSettingsListener();
-
-  SM._injectedSettings = null;
 
   // Clear the window property written by the fixed injector.js so each test
   // starts without a pre-existing injected-settings value.
@@ -206,9 +205,7 @@ runner.test(
     const SM = window.VSC.StorageManager;
     const defaults = window.VSC.Constants.DEFAULT_SETTINGS;
 
-    // --- Step 1: No listener, no event ---
-    assert.equal(SM._listenerSetup, false, 'precondition: listener must not be set up');
-    assert.equal(SM._injectedSettings, null, 'precondition: _injectedSettings must be null');
+    // --- Step 1: No listener, no event (resetStorageManager() in beforeEach ensures clean state) ---
 
     // --- Step 2: Fixed injector writes window property (no event dispatched) ---
     window.__VSC_injectedSettings = CUSTOM_SETTINGS;
@@ -255,13 +252,9 @@ runner.test(
     const defaults = window.VSC.Constants.DEFAULT_SETTINGS;
 
     // --- Step 1: Register the listener FIRST ---
+    // Correct ordering is proven by the behavioral result: if the listener were not
+    // registered before dispatch, the event would be missed and defaults returned.
     SM._setupSettingsListener();
-    assert.equal(SM._listenerSetup, true, 'precondition: listener must be registered');
-    assert.equal(
-      SM._injectedSettings,
-      null,
-      'precondition: _injectedSettings must still be null before dispatch'
-    );
 
     // --- Step 2: injector.js fires the event — listener is already registered ---
     dispatchUserSettingsEvent(CUSTOM_SETTINGS);

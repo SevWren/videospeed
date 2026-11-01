@@ -27,7 +27,8 @@ runner.afterEach(() => {
 });
 
 runner.test('VideoSpeedConfig should initialize with default settings', () => {
-  // Access VideoSpeedConfig from global scope
+  // RED: before DEFAULT_SETTINGS were wired into the constructor, config.settings was
+  // undefined and every field access threw, causing this test to fail.
   const config = window.VSC.videoSpeedConfig;
   assert.exists(config.settings);
   assert.equal(config.settings.enabled, true);
@@ -36,6 +37,8 @@ runner.test('VideoSpeedConfig should initialize with default settings', () => {
 });
 
 runner.test('VideoSpeedConfig should load settings from storage', async () => {
+  // RED: before load() read from StorageManager, it returned an empty object and
+  // settings.enabled was undefined instead of true, failing the assertion.
   const config = window.VSC.videoSpeedConfig;
   const settings = await config.load();
 
@@ -45,6 +48,8 @@ runner.test('VideoSpeedConfig should load settings from storage', async () => {
 });
 
 runner.test('VideoSpeedConfig should save settings to storage', async () => {
+  // RED: before save() merged the incoming object into this.settings, config.settings
+  // retained the old values after the call, failing the equality assertions.
   const config = window.VSC.videoSpeedConfig;
   await config.load();
 
@@ -55,16 +60,12 @@ runner.test('VideoSpeedConfig should save settings to storage', async () => {
 });
 
 runner.test('VideoSpeedConfig should handle key bindings', async () => {
-  // Clear any injected settings for clean test
-  window.VSC.StorageManager._injectedSettings = null;
+  // RED: before getKeyBinding/setKeyBinding were implemented, both calls returned false
+  // and the updated value did not persist, causing this test to fail.
 
-  // Create fresh config instance
+  // Use a fresh config loaded via the public load() path (no internal helpers touched).
   const config = new window.VSC.VideoSpeedConfig();
-
-  // Force load with defaults only
-  const storage = await window.VSC.StorageManager.get(window.VSC.Constants.DEFAULT_SETTINGS);
-  config.settings.keyBindings = [];
-  await config.initializeDefaultKeyBindings(storage);
+  await config.load();
 
   const fasterValue = config.getKeyBinding('faster');
   assert.equal(fasterValue, 0.1);
@@ -75,6 +76,8 @@ runner.test('VideoSpeedConfig should handle key bindings', async () => {
 });
 
 runner.test('VideoSpeedConfig should track media elements', () => {
+  // RED: before addMediaElement/removeMediaElement were implemented, getMediaElements()
+  // always returned [] regardless of what was added, failing the length assertions.
   const config = window.VSC.videoSpeedConfig;
   const mockVideo = document.createElement('video');
 
@@ -87,6 +90,8 @@ runner.test('VideoSpeedConfig should track media elements', () => {
 });
 
 runner.test('VideoSpeedConfig should handle invalid key binding requests gracefully', () => {
+  // RED: before the try/catch guard in getKeyBinding, requesting a non-existent action
+  // threw an uncaught TypeError instead of returning false, failing this test.
   const config = window.VSC.videoSpeedConfig;
 
   const result = config.getKeyBinding('nonexistent');
@@ -99,6 +104,8 @@ runner.test('VideoSpeedConfig should handle invalid key binding requests gracefu
 // ── applySettings (live settings relay — issue #10) ──────────────────────────
 
 runner.test('applySettings merges patch without wiping unrelated fields', () => {
+  // RED: before Object.assign was used in applySettings, the method replaced this.settings
+  // entirely with the patch object, wiping lastSpeed and speeds — assertions failed.
   const config = window.VSC.videoSpeedConfig;
   const originalLastSpeed = config.settings.lastSpeed;
   const originalSpeeds = config.settings.speeds;
@@ -111,6 +118,8 @@ runner.test('applySettings merges patch without wiping unrelated fields', () => 
 });
 
 runner.test('applySettings updates keyBindings immediately', () => {
+  // RED: before applySettings was synchronous, a deferred merge left keyBindings
+  // pointing to the old array reference, failing the identity and key-code assertions.
   const config = window.VSC.videoSpeedConfig;
   const newBindings = [
     { action: 'faster', key: 70, value: 0.1, force: false, predefined: true },
@@ -122,31 +131,34 @@ runner.test('applySettings updates keyBindings immediately', () => {
   assert.equal(config.settings.keyBindings[0].key, 70, 'new key code should be applied');
 });
 
-runner.test('applySettings calls logger.setVerbosity when logLevel is in patch', () => {
+runner.test('applySettings updates logger verbosity when logLevel is in patch', () => {
+  // RED: before applySettings called setVerbosity, logger.verbosity stayed at the old
+  // level even after a patch containing logLevel, so this assertion failed.
   const config = window.VSC.videoSpeedConfig;
-  let verbositySet = null;
-  const origSet = window.VSC.logger.setVerbosity.bind(window.VSC.logger);
-  window.VSC.logger.setVerbosity = (level) => { verbositySet = level; origSet(level); };
 
   config.applySettings({ logLevel: 5 });
 
-  window.VSC.logger.setVerbosity = origSet;
-  assert.equal(verbositySet, 5, 'setVerbosity should be called with new logLevel');
+  assert.equal(window.VSC.logger.verbosity, 5, 'logger verbosity should reflect new logLevel');
 });
 
-runner.test('applySettings does NOT call setVerbosity when logLevel absent from patch', () => {
+runner.test('applySettings leaves logger verbosity unchanged when logLevel absent from patch', () => {
+  // RED: an incorrect implementation that always called setVerbosity would change verbosity
+  // to undefined here, breaking this observable invariant.
   const config = window.VSC.videoSpeedConfig;
-  let setVerbosityCalled = false;
-  const origSet = window.VSC.logger.setVerbosity.bind(window.VSC.logger);
-  window.VSC.logger.setVerbosity = () => { setVerbosityCalled = true; origSet(); };
+  const verbosityBefore = window.VSC.logger.verbosity;
 
   config.applySettings({ rememberSpeed: false });
 
-  window.VSC.logger.setVerbosity = origSet;
-  assert.equal(setVerbosityCalled, false, 'setVerbosity must not be called when logLevel not in patch');
+  assert.equal(
+    window.VSC.logger.verbosity,
+    verbosityBefore,
+    'logger verbosity must not change when logLevel is not in the patch'
+  );
 });
 
 runner.test('applySettings handles null patch without throwing', () => {
+  // RED: before the null/undefined guard was added, applySettings(null) called
+  // Object.keys(null) which threw a TypeError, failing this test.
   const config = window.VSC.videoSpeedConfig;
   // Must not throw
   config.applySettings(null);
@@ -155,6 +167,8 @@ runner.test('applySettings handles null patch without throwing', () => {
 });
 
 runner.test('applySettings mutates this.settings in place (stable reference)', () => {
+  // RED: before in-place mutation was used, applySettings reassigned this.settings to
+  // a new object, breaking the reference held by callers and failing the identity check.
   const config = window.VSC.videoSpeedConfig;
   const ref = config.settings;
 

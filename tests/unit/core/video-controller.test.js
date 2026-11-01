@@ -32,6 +32,8 @@ runner.afterEach(() => {
 });
 
 runner.test('VideoController should initialize with video element', async () => {
+  // RED: before the constructor set target.vsc and created this.div, controller.video
+  // and mockVideo.vsc were both undefined, failing the exists/equal assertions.
   const config = window.VSC.videoSpeedConfig;
   await config.load();
 
@@ -51,6 +53,9 @@ runner.test('VideoController should initialize with video element', async () => 
 });
 
 runner.test('VideoController should return existing controller if already attached', async () => {
+  // RED: before the early-return guard on target.vsc, constructing a second controller
+  // on the same element created a new object, so controller1 !== controller2 and the
+  // equality assertion failed.
   const config = window.VSC.videoSpeedConfig;
   await config.load();
 
@@ -67,6 +72,8 @@ runner.test('VideoController should return existing controller if already attach
 });
 
 runner.test('VideoController should initialize speed based on settings', async () => {
+  // RED: before initializeSpeed read config.settings.lastSpeed when rememberSpeed was
+  // true, playbackRate stayed at 1.0 regardless of lastSpeed, failing the 2.0 assertion.
   const config = window.VSC.videoSpeedConfig;
   await config.load();
   config.settings.rememberSpeed = true;
@@ -84,6 +91,8 @@ runner.test('VideoController should initialize speed based on settings', async (
 });
 
 runner.test('VideoController should create controller UI', async () => {
+  // RED: before initializeControls created and returned a div with class vsc-controller,
+  // controller.div was undefined and the classList assertion threw, failing this test.
   const config = new window.VSC.VideoSpeedConfig();
   await config.load();
 
@@ -101,6 +110,8 @@ runner.test('VideoController should create controller UI', async () => {
 });
 
 runner.test('VideoController should handle video without source', async () => {
+  // RED: before the vsc-nosource class was conditionally applied in initializeControls,
+  // sourceless videos showed no special class, failing the classList.contains assertion.
   const config = new window.VSC.VideoSpeedConfig();
   await config.load();
 
@@ -116,6 +127,8 @@ runner.test('VideoController should handle video without source', async () => {
 });
 
 runner.test('VideoController should start hidden when configured', async () => {
+  // RED: before startHidden was respected in initializeControls, the vsc-hidden class
+  // was never applied even when config.settings.startHidden was true, failing this test.
   const config = new window.VSC.VideoSpeedConfig();
   await config.load();
   config.settings.startHidden = true;
@@ -132,6 +145,8 @@ runner.test('VideoController should start hidden when configured', async () => {
 });
 
 runner.test('VideoController should clean up properly when removed', async () => {
+  // RED: before remove() deleted video.vsc and called config.removeMediaElement,
+  // the vsc reference and the media element list were not cleared, failing both assertions.
   const config = new window.VSC.VideoSpeedConfig();
   await config.load();
 
@@ -156,6 +171,8 @@ runner.test('VideoController should clean up properly when removed', async () =>
 });
 
 runner.test('VideoController should track media elements in config', async () => {
+  // RED: before the constructor called config.addMediaElement, the config list stayed
+  // empty after creating controllers, causing the count assertions to fail.
   const config = new window.VSC.VideoSpeedConfig();
   await config.load();
 

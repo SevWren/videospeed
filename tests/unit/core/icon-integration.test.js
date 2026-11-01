@@ -56,6 +56,9 @@ function createMockVideo(options = {}) {
 }
 
 runner.test('VideoController should dispatch CONTROLLER_CREATED event', async () => {
+  // RED: before dispatchControllerEvent('VSC_CONTROLLER_CREATED', ...) was called in
+  // the constructor, the window listener never fired, leaving eventReceived false and
+  // failing the assertion.
   let eventReceived = false;
   let eventDetail = null;
 
@@ -96,6 +99,9 @@ runner.test('VideoController should dispatch CONTROLLER_CREATED event', async ()
 });
 
 runner.test('VideoController should dispatch CONTROLLER_REMOVED event', async () => {
+  // RED: before dispatchControllerEvent('VSC_CONTROLLER_REMOVED', ...) was called in
+  // remove(), the removed listener never fired, leaving removedEventReceived false and
+  // failing the assertion.
   let createdEventReceived = false;
   let removedEventReceived = false;
   let removedEventDetail = null;
@@ -145,6 +151,8 @@ runner.test('VideoController should dispatch CONTROLLER_REMOVED event', async ()
 });
 
 runner.test('Controllers should have unique IDs', async () => {
+  // RED: before generateControllerId incorporated a timestamp, two controllers created
+  // in the same tick produced identical IDs, failing the uniqueness assertion.
   const config = window.VSC.videoSpeedConfig;
   await config.load();
 
@@ -177,6 +185,8 @@ runner.test('Controllers should have unique IDs', async () => {
 });
 
 runner.test('Audio controllers should dispatch events too', async () => {
+  // RED: before the event dispatch in the constructor handled audio elements, no
+  // VSC_CONTROLLER_CREATED event was emitted for audio, leaving eventReceived false.
   let eventReceived = false;
   let eventDetail = null;
 
@@ -223,4 +233,4 @@ runner.test('Audio controllers should dispatch events too', async () => {
   document.body.removeChild(mockAudio);
 });
 
-export { runner as iconIntegrationTestRunner }; 
+export { runner as iconIntegrationTestRunner };

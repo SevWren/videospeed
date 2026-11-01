@@ -11,15 +11,17 @@ await loadObserverModules();
 
 const runner = new SimpleTestRunner();
 
-// Test constants - values guaranteed to be below the minimum controller size limits
+// Test constants — arbitrary small sizes used to exercise audio/video element handling.
+// The production isValidMediaElement() has no size threshold; these values represent
+// elements that would have been invisible in older size-gated logic.
 const SMALL_AUDIO_SIZE = {
-  WIDTH: 20, // Below AUDIO_MIN_WIDTH (25)
-  HEIGHT: 15, // Below AUDIO_MIN_HEIGHT (25)
+  WIDTH: 20,
+  HEIGHT: 15,
 };
 
 const SMALL_VIDEO_SIZE = {
-  WIDTH: 40, // Below VIDEO_MIN_WIDTH (50)  
-  HEIGHT: 30, // Below VIDEO_MIN_HEIGHT (50)
+  WIDTH: 40,
+  HEIGHT: 30,
 };
 
 runner.beforeEach(() => {
@@ -137,12 +139,6 @@ runner.test('VideoController should start visible for small audio elements', asy
   assert.false(
     controller.div.classList.contains('vsc-hidden'),
     'Small audio controller should start visible'
-  );
-
-  // Verify it's not hidden (uses natural visibility)
-  assert.false(
-    controller.div.classList.contains('vsc-hidden'),
-    'Small audio controller should not be hidden'
   );
 
   // Cleanup

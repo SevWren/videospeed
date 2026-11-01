@@ -720,14 +720,6 @@ if (shouldInjectInCurrentFrame()) {
 window.VideoSpeedExtension = VideoSpeedExtension;
 window.videoSpeedExtension = extension;
 
-// Relay live settings changes from the Options page into the running extension
-window.addEventListener('VSC_USER_SETTINGS', (event) => {
-  if (!extension?.initialized) {
-    return;
-  }
-  extension.config.applySettings(event.detail);
-});
-
 // Add test indicator for E2E tests (guard: document.head may be null in sub-frames)
 if (document.head) {
   const testIndicator = document.createElement('div');

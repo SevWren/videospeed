@@ -1,7 +1,7 @@
 /**
- * TDD failing tests — Finding 4: VSC_USER_SETTINGS dispatch / StorageManager listener race
+ * Race condition tests — Finding 4: VSC_USER_SETTINGS dispatch / StorageManager listener race
  *
- * T3-A7 | Branch: fix/path-b-world-main | Date: 2026-11-01
+ * T1-A5 | Branch: fix/path-b-world-main | Date: 2026-11-01
  *
  * Seam under test: StorageManager._setupSettingsListener() / waitForInjectedSettings()
  *
@@ -13,21 +13,26 @@
  *   waitForInjectedSettings() then polls _injectedSettings every 10 ms for 5 s and
  *   resolves with DEFAULT_SETTINGS, silently discarding the user's custom config.
  *
- * Test 1 — RED (dispatch before listener = settings permanently lost):
- *   Dispatches VSC_USER_SETTINGS BEFORE _setupSettingsListener() runs, then calls
- *   waitForInjectedSettings().  Asserts that the custom value IS returned.
- *   Currently fails because the event is lost; _injectedSettings stays null.
+ * Test 1 — Scenario A (base race still exists):
+ *   Dispatches ONLY the DOM event (no window.__VSC_injectedSettings set).
+ *   Listener is NOT registered before dispatch.
+ *   Asserts that custom settings ARE LOST and defaults are returned.
+ *   This proves the underlying race condition is real and still present if only the
+ *   event mechanism is used without the window-property fallback.
  *
- * Test 2 — GREEN (dispatch after listener = settings received):
+ * Test 2 — Scenario B (window-property fallback fix works):
+ *   Writes window.__VSC_injectedSettings directly (no event dispatched, no listener).
+ *   Asserts that waitForInjectedSettings() recovers the custom settings via the
+ *   window property. This proves the Option A fix works.
+ *
+ * Test 3 — GREEN (dispatch after listener = happy path):
  *   Registers the listener first, THEN dispatches VSC_USER_SETTINGS, then calls
  *   waitForInjectedSettings().  Asserts custom value is received.
  *   Documents the happy path; must stay green.
  *
- * Timeout strategy: rather than waiting the real 5000 ms for Test 1, we (a) set
- * _injectedSettings directly to observe the missed-event state and (b) call
- * waitForInjectedSettings() with a fake deadline by temporarily shortening the
- * global setTimeout to expire immediately.  This keeps the suite fast while still
- * exercising the real polling path.
+ * Timeout strategy: rather than waiting the real 5000 ms for Test 1 (Scenario A),
+ * we intercept the 5000 ms deadline setTimeout and reduce it to 20 ms so the suite
+ * remains fast while still exercising the real polling path.
  */
 
 import { loadMinimalModules } from '../../helpers/module-loader.js';
@@ -67,6 +72,15 @@ function resetStorageManager() {
 }
 
 /**
+ * Dispatch ONLY the DOM event — does NOT set window.__VSC_injectedSettings.
+ * Use this to simulate the unfixed injector.js (pure event, no window property
+ * fallback), in order to demonstrate that the base race condition still exists.
+ */
+function dispatchEventOnly(detail) {
+  window.dispatchEvent(new CustomEvent('VSC_USER_SETTINGS', { detail }));
+}
+
+/**
  * Dispatch VSC_USER_SETTINGS with the given detail object — mirrors exactly
  * what injector.js::injectUserSettings() does after the Option A race fix:
  * sets window.__VSC_injectedSettings BEFORE dispatching the event so that
@@ -88,26 +102,25 @@ runner.afterEach(() => {
 });
 
 // =============================================================================
-// Test 1 — RED
-// Dispatch fires BEFORE _setupSettingsListener() — event is permanently lost.
+// Test 1 — Scenario A: base race condition (pure event, no window property)
 //
-// Expected (after fix): waitForInjectedSettings() returns CUSTOM_SETTINGS values.
-// Actual (unfixed):     _injectedSettings remains null; waitForInjectedSettings()
-//                       would time out and return defaults.
+// The unfixed injector only dispatches a CustomEvent; it does NOT write
+// window.__VSC_injectedSettings.  If the listener is not yet registered when
+// the event fires, the event is lost forever.
 //
-// We test two observable facts in this scenario:
-//   (a) _injectedSettings is null after the missed event + listener registration
-//       — proving the event was irrecoverably lost.
-//   (b) waitForInjectedSettings() returns defaults, NOT the custom values
-//       — the user-facing failure.  We assert the DESIRED outcome (custom values
-//       ARE returned) so this test is RED until a fix is applied.
+// This test uses dispatchEventOnly() — which purposely does NOT set the window
+// property — to prove the race still exists at the event layer.
 //
-// To avoid a 5000 ms wait for fact (b), we shorten the polling deadline by
-// temporarily replacing window.setTimeout so the timeout fires on the next tick.
+// Observable facts:
+//   (a) _injectedSettings is still null after the missed event.
+//   (b) waitForInjectedSettings() times out and returns defaults.
+//
+// To avoid a 5000 ms wait, we intercept the 5000 ms deadline setTimeout and
+// reduce it to 20 ms.
 // =============================================================================
 
 runner.test(
-  'Test 1 (RED) — VSC_USER_SETTINGS dispatched before listener: custom settings are lost',
+  'Test 1 — Scenario A: pure event dispatched before listener — settings are lost (base race)',
   async () => {
     const SM = window.VSC.StorageManager;
     const defaults = window.VSC.Constants.DEFAULT_SETTINGS;
@@ -115,39 +128,42 @@ runner.test(
     // --- Step 1: StorageManager listener is NOT yet registered ---
     assert.equal(SM._listenerSetup, false, 'precondition: listener must not be set up yet');
     assert.equal(SM._injectedSettings, null, 'precondition: _injectedSettings must be null');
+    assert.equal(
+      window.__VSC_injectedSettings,
+      undefined,
+      'precondition: window.__VSC_injectedSettings must not exist'
+    );
 
-    // --- Step 2: injector.js fires the event (fire-and-forget, no ACK) ---
-    dispatchUserSettingsEvent(CUSTOM_SETTINGS);
+    // --- Step 2: injector.js fires ONLY the event — no window property written ---
+    // This simulates the unfixed injector (pure CustomEvent, no fallback).
+    dispatchEventOnly(CUSTOM_SETTINGS);
 
-    // --- Step 3: Now the listener is registered (too late — event already gone) ---
+    // --- Step 3: Listener is registered too late — event already gone ---
     SM._setupSettingsListener();
-    assert.equal(SM._listenerSetup, true, 'listener should be marked as set up');
+    assert.equal(SM._listenerSetup, true, 'listener should now be marked as set up');
 
-    // --- Step 4a: Verify the race — _injectedSettings is still null ---
-    // The event fired before the listener was registered; it was silently dropped.
-    // This is the root cause: there is no way to recover a missed CustomEvent.
+    // --- Step 4a: Confirm the race — _injectedSettings is still null ---
     assert.equal(
       SM._injectedSettings,
       null,
-      'RACE CONFIRMED: _injectedSettings must still be null — the event was dispatched before the listener registered and is permanently lost'
+      'RACE CONFIRMED: _injectedSettings must still be null — event was lost before listener registered'
+    );
+    assert.equal(
+      window.__VSC_injectedSettings,
+      undefined,
+      'RACE CONFIRMED: window.__VSC_injectedSettings must still be absent'
     );
 
-    // --- Step 4b: waitForInjectedSettings() must return the custom values ---
-    // This assertion documents what SHOULD happen after the fix.
-    // Currently RED: the method polls for up to 5000 ms then returns defaults.
-    // To avoid blocking the test suite for 5 s, we shorten the timeout to 20 ms
-    // by temporarily overriding window.setTimeout.
-
+    // --- Step 4b: waitForInjectedSettings() must return defaults (settings lost) ---
+    // Shorten the 5000 ms deadline to 20 ms to keep the suite fast.
     const realSetTimeout = window.setTimeout.bind(window);
     const realClearTimeout = window.clearTimeout.bind(window);
 
-    // Intercept the deadline setTimeout (the 5000 ms one) and reduce it to 20 ms.
-    // The 10 ms poll setTimeouts are left unchanged so the poll loop still runs.
     let deadlineIntercepted = false;
     window.setTimeout = function shortDeadlineSetTimeout(fn, ms, ...args) {
       if (ms === 5000 && !deadlineIntercepted) {
         deadlineIntercepted = true;
-        return realSetTimeout(fn, 20, ...args); // fire after 20 ms instead
+        return realSetTimeout(fn, 20, ...args);
       }
       return realSetTimeout(fn, ms, ...args);
     };
@@ -160,30 +176,79 @@ runner.test(
       window.setTimeout = realSetTimeout;
     }
 
-    // DESIRED outcome (currently RED — will go GREEN after fix):
-    // The fix must ensure waitForInjectedSettings() recovers the custom settings
-    // even when the event fires before the listener is registered.
+    // The base race causes waitForInjectedSettings() to time out and return
+    // defaults — the custom values are silently discarded.
     assert.equal(
       result.rememberSpeed,
-      CUSTOM_SETTINGS.rememberSpeed,
-      'RED: rememberSpeed from custom settings must be returned (currently lost due to race)'
+      defaults.rememberSpeed,
+      'Scenario A: rememberSpeed must be the DEFAULT value — custom settings were lost'
     );
     assert.equal(
       result.lastSpeed,
-      CUSTOM_SETTINGS.lastSpeed,
-      'RED: lastSpeed from custom settings must be returned (currently lost due to race)'
+      defaults.lastSpeed,
+      'Scenario A: lastSpeed must be the DEFAULT value — custom settings were lost'
     );
     assert.equal(
       result.enabled,
-      CUSTOM_SETTINGS.enabled,
-      'RED: enabled from custom settings must be returned (currently lost due to race)'
+      defaults.enabled,
+      'Scenario A: enabled must be the DEFAULT value — custom settings were lost'
     );
   }
 );
 
 // =============================================================================
-// Test 2 — GREEN
-// Listener registered BEFORE dispatch — happy path, settings received.
+// Test 2 — Scenario B: window-property fallback fix works
+//
+// The fixed injector writes window.__VSC_injectedSettings BEFORE (or instead of)
+// dispatching the event.  No event is dispatched here and no listener is
+// registered.  waitForInjectedSettings() must still recover the custom settings
+// by reading the window property directly.
+//
+// This proves the Option A fix is sufficient: even a completely missed event is
+// recoverable as long as the window property is present.
+// =============================================================================
+
+runner.test(
+  'Test 2 — Scenario B: window property set without event — settings recovered by fix',
+  async () => {
+    const SM = window.VSC.StorageManager;
+    const defaults = window.VSC.Constants.DEFAULT_SETTINGS;
+
+    // --- Step 1: No listener, no event ---
+    assert.equal(SM._listenerSetup, false, 'precondition: listener must not be set up');
+    assert.equal(SM._injectedSettings, null, 'precondition: _injectedSettings must be null');
+
+    // --- Step 2: Fixed injector writes window property (no event dispatched) ---
+    window.__VSC_injectedSettings = CUSTOM_SETTINGS;
+
+    // --- Step 3: waitForInjectedSettings() should find the window property ---
+    const result = await SM.waitForInjectedSettings(defaults);
+
+    assert.equal(
+      result.rememberSpeed,
+      CUSTOM_SETTINGS.rememberSpeed,
+      'Scenario B: rememberSpeed from custom settings must be returned via window property'
+    );
+    assert.equal(
+      result.lastSpeed,
+      CUSTOM_SETTINGS.lastSpeed,
+      'Scenario B: lastSpeed from custom settings must be returned via window property'
+    );
+    assert.equal(
+      result.enabled,
+      CUSTOM_SETTINGS.enabled,
+      'Scenario B: enabled from custom settings must be returned via window property'
+    );
+    assert.equal(
+      result.blacklist,
+      CUSTOM_SETTINGS.blacklist,
+      'Scenario B: blacklist from custom settings must be returned via window property'
+    );
+  }
+);
+
+// =============================================================================
+// Test 3 — Happy path: listener registered before dispatch
 //
 // _setupSettingsListener() runs first, then the event is dispatched.
 // _injectedSettings is set synchronously inside the listener callback.
@@ -192,7 +257,7 @@ runner.test(
 // =============================================================================
 
 runner.test(
-  'Test 2 (GREEN) — VSC_USER_SETTINGS dispatched after listener: custom settings received',
+  'Test 3 — VSC_USER_SETTINGS dispatched after listener: custom settings received (happy path)',
   async () => {
     const SM = window.VSC.StorageManager;
     const defaults = window.VSC.Constants.DEFAULT_SETTINGS;
@@ -200,7 +265,11 @@ runner.test(
     // --- Step 1: Register the listener FIRST ---
     SM._setupSettingsListener();
     assert.equal(SM._listenerSetup, true, 'precondition: listener must be registered');
-    assert.equal(SM._injectedSettings, null, 'precondition: _injectedSettings must still be null before dispatch');
+    assert.equal(
+      SM._injectedSettings,
+      null,
+      'precondition: _injectedSettings must still be null before dispatch'
+    );
 
     // --- Step 2: injector.js fires the event — listener is already registered ---
     dispatchUserSettingsEvent(CUSTOM_SETTINGS);
@@ -218,22 +287,22 @@ runner.test(
     assert.equal(
       result.rememberSpeed,
       CUSTOM_SETTINGS.rememberSpeed,
-      'GREEN: rememberSpeed from custom settings must be returned'
+      'happy path: rememberSpeed from custom settings must be returned'
     );
     assert.equal(
       result.lastSpeed,
       CUSTOM_SETTINGS.lastSpeed,
-      'GREEN: lastSpeed from custom settings must be returned'
+      'happy path: lastSpeed from custom settings must be returned'
     );
     assert.equal(
       result.enabled,
       CUSTOM_SETTINGS.enabled,
-      'GREEN: enabled from custom settings must be returned'
+      'happy path: enabled from custom settings must be returned'
     );
     assert.equal(
       result.blacklist,
       CUSTOM_SETTINGS.blacklist,
-      'GREEN: blacklist from custom settings must be returned'
+      'happy path: blacklist from custom settings must be returned'
     );
   }
 );

@@ -76,6 +76,7 @@ if (!window.VSC.StorageManager) {
       // the listener was registered (race condition fix — Option A).
       if (window.__VSC_injectedSettings) {
         this._injectedSettings = window.__VSC_injectedSettings;
+        delete window.__VSC_injectedSettings;
         const merged = { ...defaults, ...this._injectedSettings };
         window.VSC.logger.debug('Using injected settings from window property');
         return Promise.resolve(merged);
@@ -100,6 +101,7 @@ if (!window.VSC.StorageManager) {
           // injector.js sets it after waitForInjectedSettings() was first called.
           if (window.__VSC_injectedSettings && !this._injectedSettings) {
             this._injectedSettings = window.__VSC_injectedSettings;
+            delete window.__VSC_injectedSettings;
           }
           if (this._injectedSettings) {
             clearTimeout(deadline);

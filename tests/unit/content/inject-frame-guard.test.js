@@ -142,7 +142,7 @@ runner.test(
 // ─────────────────────────────────────────────────────────────────────────────
 
 runner.test(
-  'Test 2 [RED] inject.js must NOT call extension.initialize() when running in an iframe',
+  'Test 2 inject.js must NOT call extension.initialize() when running in an iframe',
   async () => {
     installChromeMock();
     resetMockStorage();
@@ -220,10 +220,7 @@ runner.test(
 
 runner.test(
   'Test 3 [GREEN] inject.js MUST call extension.initialize() when running in the top frame',
-  async () => {
-    installChromeMock();
-    resetMockStorage();
-
+  () => {
     ensureTopFrame();
 
     assert.false(
@@ -231,58 +228,20 @@ runner.test(
       'Precondition: inIframe() must be false in JSDOM default top-frame context'
     );
 
-    const VSEClass = window.VideoSpeedExtension;
-    assert.exists(VSEClass, 'window.VideoSpeedExtension must be exported by inject.js');
+    // The real production function must be exposed by inject.js.
+    const guardFn = window.VSC._shouldInjectInCurrentFrame;
+    assert.true(
+      typeof guardFn === 'function',
+      'inject.js must expose shouldInjectInCurrentFrame as window.VSC._shouldInjectInCurrentFrame'
+    );
 
-    const origInitialize = VSEClass.prototype.initialize;
-    let initializeCalled = false;
-    VSEClass.prototype.initialize = async function frameGuardTestStub() {
-      initializeCalled = true;
-      // Do not call through — avoids real extension side-effects in JSDOM.
-    };
-
-    try {
-      // Reference implementation of shouldInjectInCurrentFrame() from T1-A3 Phase 5.
-      // In top-frame context: inIframe() returns false => returns true immediately.
-      function shouldInjectInCurrentFrame() {
-        if (!window.VSC.DomUtils.inIframe()) {
-          return true;
-        }
-        try {
-          const href = window.location.href;
-          if (
-            !href.startsWith('http://') &&
-            !href.startsWith('https://') &&
-            !href.startsWith('file://')
-          ) {
-            return false;
-          }
-        } catch (e) {
-          return false;
-        }
-        try {
-          void window.parent.document;
-          return false; // same-origin parent
-        } catch (e) {
-          return true; // cross-origin parent — embedded player
-        }
-      }
-
-      // In top-frame context shouldInjectInCurrentFrame() returns true.
-      if (shouldInjectInCurrentFrame()) {
-        const ext = new VSEClass();
-        await ext.initialize();
-      }
-
-      assert.true(
-        initializeCalled,
-        'inject.js must call extension.initialize() when running in the top-level frame. ' +
-          'shouldInjectInCurrentFrame() must return true when window.self === window.top.'
-      );
-    } finally {
-      VSEClass.prototype.initialize = origInitialize;
-      cleanupChromeMock();
-    }
+    // In top-frame context (window.self === window.top) the real guard must return true.
+    const result = guardFn();
+    assert.true(
+      result,
+      'window.VSC._shouldInjectInCurrentFrame() must return true when running in the top-level ' +
+        'frame (window.self === window.top). inject.js must call extension.initialize() in this context.'
+    );
   }
 );
 

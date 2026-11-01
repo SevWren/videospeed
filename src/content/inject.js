@@ -698,7 +698,10 @@ function shouldInjectInCurrentFrame() {
     void window.parent.document;
     return false; // same-origin parent — top-level frame handles it
   } catch (e) {
-    return true; // cross-origin parent — embedded player needs its own VSC instance
+    if (e.name === 'SecurityError') {
+      return true; // cross-origin embedded player
+    }
+    return false; // unexpected error — skip injection
   }
 }
 

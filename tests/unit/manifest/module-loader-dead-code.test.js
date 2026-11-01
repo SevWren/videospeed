@@ -10,12 +10,11 @@
  *   ISOLATED and MAIN world blocks). It was never injected by the browser, so
  *   its window.loadModule / window.defineModule globals are never created.
  *
- * Test 2 (RED until fix):
- *   module-loader.js is still listed explicitly in web_accessible_resources.
- *   Listing it there makes it fetchable from the page via
- *   chrome.runtime.getURL(), which is unnecessary attack surface for a file
- *   that nothing calls. This test must go RED now and GREEN after the entry is
- *   removed.
+ * Test 2 (GREEN — regression guard):
+ *   module-loader.js is absent from web_accessible_resources. Listing it there
+ *   would make it fetchable from the page via chrome.runtime.getURL(), which is
+ *   unnecessary attack surface for a file that nothing calls. This test guards
+ *   against the entry being re-introduced.
  *
  * Test 3 (GREEN — regression guard):
  *   None of the files actually injected by content_scripts call loadModule()
@@ -56,7 +55,7 @@ runner.test(
 // Test 2 — module-loader.js must NOT be in web_accessible_resources (RED now)
 // ---------------------------------------------------------------------------
 runner.test(
-  'module-loader.js is absent from web_accessible_resources (RED until fix removes it)',
+  'module-loader.js is absent from web_accessible_resources (regression guard)',
   () => {
     const war = manifest.web_accessible_resources ?? [];
     const allResources = war.flatMap((entry) => entry.resources ?? []);

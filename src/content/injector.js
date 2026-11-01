@@ -15,19 +15,6 @@
  * See: manifest.json content_scripts[1] (world:"MAIN", 26 modules + inject.js)
  *      manifest.json content_scripts[2] (world:"MAIN", Netflix-specific script)
  */
-const USER_CONTROLLED_KEYS = new Set([
-  'keyBindings',
-  'rememberSpeed',
-  'forceLastSavedSpeed',
-  'audioBoolean',
-  'startHidden',
-  'controllerOpacity',
-  'controllerButtonSize',
-  'logLevel',
-  'blacklist',
-  'enabled',
-]);
-
 // Set up message bridge between extension popup and injected page
 function setupMessageBridge() {
   const isExtensionContextInvalidated = (error) => {
@@ -55,35 +42,6 @@ function setupMessageBridge() {
       return true;
     }
   });
-
-  // Relay Options-page storage changes to the injected page world
-  try {
-    chrome.storage.onChanged.addListener((changes, area) => {
-      try {
-        if (area !== 'sync') {
-          return;
-        }
-        const patch = {};
-        for (const [key, { newValue }] of Object.entries(changes)) {
-          if (USER_CONTROLLED_KEYS.has(key)) {
-            patch[key] = newValue;
-          }
-        }
-        if (Object.keys(patch).length === 0) {
-          return;
-        }
-        window.dispatchEvent(new CustomEvent('VSC_USER_SETTINGS', { detail: patch }));
-      } catch (innerError) {
-        if (!isExtensionContextInvalidated(innerError)) {
-          console.error('❌ Error in storage.onChanged relay:', innerError);
-        }
-      }
-    });
-  } catch (error) {
-    if (!isExtensionContextInvalidated(error)) {
-      console.error('❌ Failed to register storage.onChanged listener:', error);
-    }
-  }
 
   // Listen for save settings requests from injected page context
   window.addEventListener('VSC_SAVE_SETTINGS', async (event) => {

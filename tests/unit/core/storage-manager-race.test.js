@@ -307,4 +307,41 @@ runner.test(
   }
 );
 
+// =============================================================================
+// Test 4 — Fix G: window.__VSC_injectedSettings deleted after consumption
+//
+// storage-manager.js must delete window.__VSC_injectedSettings after reading it
+// so that SPA re-navigation (a second call to waitForInjectedSettings()) does
+// not pick up stale settings from the previous page load.
+//
+// This test verifies the production-code delete at the early-check path.
+// =============================================================================
+
+runner.test(
+  'Test 4 — Fix G: window.__VSC_injectedSettings is deleted after waitForInjectedSettings resolves',
+  async () => {
+    const SM = window.VSC.StorageManager;
+    const defaults = window.VSC.Constants.DEFAULT_SETTINGS;
+
+    // --- Step 1: Simulate fixed injector writing the window property ---
+    window.__VSC_injectedSettings = CUSTOM_SETTINGS;
+
+    // --- Step 2: First call resolves with custom settings ---
+    const result = await SM.waitForInjectedSettings(defaults);
+
+    assert.equal(
+      result.rememberSpeed,
+      CUSTOM_SETTINGS.rememberSpeed,
+      'Fix G precondition: custom settings must be returned'
+    );
+
+    // --- Step 3: The window property must be deleted after consumption ---
+    assert.equal(
+      window.__VSC_injectedSettings,
+      undefined,
+      'Fix G: window.__VSC_injectedSettings must be deleted after consumption to prevent SPA stale-settings'
+    );
+  }
+);
+
 export { runner as storageManagerRaceTestRunner };

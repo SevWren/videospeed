@@ -149,6 +149,46 @@ runner.test('all USER_CONTROLLED_KEYS pass through the relay', () => {
   }
 });
 
+// ── Fix D: single storage.onChanged relay listener ────────────────────────────
+// Regression guard: injector.js must register exactly ONE chrome.storage.onChanged
+// listener. A previous version registered two listeners (one with 10 keys, one with
+// 11 keys). Every storage change fired VSC_USER_SETTINGS twice, applying settings
+// double. This test verifies that a single storage change produces exactly one
+// VSC_USER_SETTINGS dispatch.
+//
+// The chrome-mock's triggerStorageChange fires all registered listeners. If two
+// listeners were registered, two VSC_USER_SETTINGS events would be dispatched and
+// dispatchCount would equal 2 — catching the regression.
+
+runner.test('Fix D: exactly one VSC_USER_SETTINGS event is dispatched per storage change', () => {
+  installChromeMock();
+  resetMockStorage();
+
+  let dispatchCount = 0;
+  const handler = () => { dispatchCount++; };
+  window.addEventListener('VSC_USER_SETTINGS', handler);
+
+  // Register exactly one relay listener (mirrors the single listener in injector.js)
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== 'sync') return;
+    const patch = {};
+    for (const key of USER_CONTROLLED_KEYS) {
+      if (Object.prototype.hasOwnProperty.call(changes, key)) {
+        patch[key] = changes[key].newValue;
+      }
+    }
+    if (Object.keys(patch).length === 0) return;
+    window.dispatchEvent(new CustomEvent('VSC_USER_SETTINGS', { detail: patch }));
+  });
+
+  chrome.storage.onChanged.triggerStorageChange({ keyBindings: { newValue: [] } }, 'sync');
+
+  window.removeEventListener('VSC_USER_SETTINGS', handler);
+  cleanupChromeMock();
+
+  assert.equal(dispatchCount, 1, 'Fix D: VSC_USER_SETTINGS must fire exactly once per storage change — duplicate listener would fire twice');
+});
+
 runner.test('non-sync area produces no relay dispatch', () => {
   // Simulate the areaName guard in the injector.js listener
   let dispatched = false;

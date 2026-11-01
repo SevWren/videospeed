@@ -286,4 +286,35 @@ runner.test('VSC_USER_SETTINGS does not wipe unrelated runtime state', () => {
   assert.equal(ext.config.settings.lastSpeed, 1.5, 'lastSpeed must not be reset by relay patch');
 });
 
+// ── Gap 1: setupDocumentCSS null-head defensive guard (T3-A5) ─────────────────
+// RED test: currently throws TypeError because line 454 of inject.js calls
+// document.head.appendChild(link) with no null check on document.head.
+// This test will go GREEN once the guard `if (!document.head) return;` is added.
+
+runner.test('setupDocumentCSS does not throw when document.head is null', async () => {
+  extension = new window.VideoSpeedExtension();
+  await extension.initialize();
+
+  // Simulate a document whose head is null (SVG frame, sandboxed frame, etc.)
+  const nullHeadDoc = {
+    createElement: (tag) => document.createElement(tag),
+    head: null,
+  };
+
+  let threw = false;
+  let thrownError = null;
+  try {
+    extension.setupDocumentCSS(nullHeadDoc);
+  } catch (e) {
+    threw = true;
+    thrownError = e;
+  }
+
+  assert.false(
+    threw,
+    `setupDocumentCSS must not throw when document.head is null` +
+      (thrownError ? ` — got: ${thrownError.message}` : '')
+  );
+});
+
 export { runner as injectTestRunner };

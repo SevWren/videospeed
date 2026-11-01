@@ -83,4 +83,60 @@ runner.test('world:MAIN block includes src/utils/constants.js as first entry (P1
   );
 });
 
+runner.test('all world:MAIN content_scripts blocks declare run_at:"document_end"', () => {
+  const contentScripts = manifest.content_scripts ?? [];
+  const mainWorldBlocks = contentScripts.filter((cs) => cs.world === 'MAIN');
+  assert.true(
+    mainWorldBlocks.length > 0,
+    'no world:MAIN blocks found — cannot verify run_at'
+  );
+  for (const block of mainWorldBlocks) {
+    assert.equal(
+      block.run_at,
+      'document_end',
+      `world:MAIN block (js: ${JSON.stringify(block.js?.[0])}) must declare run_at:"document_end" ` +
+        `to ensure MAIN-world scripts run before document_idle (got: ${JSON.stringify(block.run_at)})`
+    );
+  }
+});
+
+runner.test('Block 0 (injector.js / ISOLATED world) has match_about_blank:false', () => {
+  const contentScripts = manifest.content_scripts ?? [];
+  const block0 = contentScripts[0];
+  assert.true(
+    block0 !== undefined,
+    'content_scripts[0] does not exist'
+  );
+  assert.equal(
+    block0.match_about_blank,
+    false,
+    'content_scripts[0] (injector.js / ISOLATED world) must set match_about_blank:false ' +
+      'to prevent injection into YouTube sandboxed about:blank iframes (currently true, causes console errors)'
+  );
+});
+
+runner.test('base-handler.js appears before all other site handler files in world:MAIN js array (regression guard)', () => {
+  const contentScripts = manifest.content_scripts ?? [];
+  const mainWorldEntry = contentScripts.find(
+    (cs) => cs.world === 'MAIN' && (cs.js ?? []).includes('src/site-handlers/base-handler.js')
+  );
+  if (!mainWorldEntry) {
+    assert.true(false, 'no world:MAIN block containing base-handler.js found');
+    return;
+  }
+  const files = mainWorldEntry.js ?? [];
+  const baseIndex = files.indexOf('src/site-handlers/base-handler.js');
+  assert.true(baseIndex !== -1, 'src/site-handlers/base-handler.js not found in world:MAIN js array');
+  const siteHandlerPattern = /^src\/site-handlers\/.+-handler\.js$/;
+  const otherHandlersBefore = files
+    .slice(0, baseIndex)
+    .filter((f) => siteHandlerPattern.test(f) && f !== 'src/site-handlers/base-handler.js');
+  assert.equal(
+    otherHandlersBefore.length,
+    0,
+    `base-handler.js must appear before all other site handler files; ` +
+      `found these site handlers before it: ${JSON.stringify(otherHandlersBefore)}`
+  );
+});
+
 export default runner;

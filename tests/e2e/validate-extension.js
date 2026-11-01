@@ -73,8 +73,7 @@ function validateExtension() {
     );
     test(
       'minimum_chrome_version is 111 or higher',
-      manifest.minimum_chrome_version &&
-        parseInt(manifest.minimum_chrome_version, 10) >= 111
+      manifest.minimum_chrome_version && parseInt(manifest.minimum_chrome_version, 10) >= 111
     );
     test(
       '"scripting" permission is absent',

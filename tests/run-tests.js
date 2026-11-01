@@ -172,8 +172,11 @@ async function runTests() {
       'unit/observers/audio-size-handling.test.js',
       'unit/content/inject.test.js',
       'unit/content/injector-relay.test.js',
+      'unit/content/inject-frame-guard.test.js',
       'unit/utils/recursive-shadow-dom.test.js',
       'unit/utils/blacklist-regex.test.js',
+      'unit/utils/constants-deduplication.test.js',
+      'unit/utils/event-manager-namespace.test.js',
       'unit/core/gif-frame-engine.test.js',
       'unit/observers/gif-observer.test.js',
       'unit/core/gif-controller.test.js',
@@ -181,6 +184,8 @@ async function runTests() {
       'unit/core/action-handler-gif.test.js',
       'unit/content/injector-relay.test.js',
       'unit/manifest/permissions.test.js',
+      'unit/manifest/module-loader-dead-code.test.js',
+      'unit/core/storage-manager-race.test.js',
     ];
   } else if (testType === 'integration') {
     testFiles = [
@@ -200,8 +205,11 @@ async function runTests() {
       'unit/observers/audio-size-handling.test.js',
       'unit/content/inject.test.js',
       'unit/content/injector-relay.test.js',
+      'unit/content/inject-frame-guard.test.js',
       'unit/utils/recursive-shadow-dom.test.js',
       'unit/utils/blacklist-regex.test.js',
+      'unit/utils/constants-deduplication.test.js',
+      'unit/utils/event-manager-namespace.test.js',
       'unit/core/gif-frame-engine.test.js',
       'unit/observers/gif-observer.test.js',
       'unit/core/gif-controller.test.js',
@@ -209,6 +217,8 @@ async function runTests() {
       'unit/core/action-handler-gif.test.js',
       'unit/content/injector-relay.test.js',
       'unit/manifest/permissions.test.js',
+      'unit/manifest/module-loader-dead-code.test.js',
+      'unit/core/storage-manager-race.test.js',
       'integration/module-integration.test.js',
       'integration/gif-integration.test.js',
     ];

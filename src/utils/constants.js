@@ -6,7 +6,7 @@
 // Initialize global namespace for content script
 
 window.VSC = window.VSC || {};
-window.VSC.Constants = {};
+window.VSC.Constants = window.VSC.Constants || {};
 
 // Skip loading if already loaded to prevent redeclaration errors
 if (!window.VSC.Constants.DEFAULT_SETTINGS) {

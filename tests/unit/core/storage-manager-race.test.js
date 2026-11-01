@@ -54,21 +54,26 @@ const CUSTOM_SETTINGS = {
  */
 function resetStorageManager() {
   const SM = window.VSC.StorageManager;
-  SM._injectedSettings = null;
-  SM._listenerSetup = false;
 
-  // Remove any lingering VSC_USER_SETTINGS listeners left by previous test
-  // by replacing the window with a fresh event-listener state.  JSDOM does not
-  // provide a public API to enumerate listeners, so we recreate the flag and
-  // rely on the _listenerSetup guard in _setupSettingsListener() to re-register
-  // a fresh listener when the next test calls it.
+  // Remove the current listener (if any) so stale listeners from earlier test
+  // files in the shared JSDOM environment cannot fire during this test.
+  SM._teardownSettingsListener();
+
+  SM._injectedSettings = null;
+
+  // Clear the window property written by the fixed injector.js so each test
+  // starts without a pre-existing injected-settings value.
+  delete window.__VSC_injectedSettings;
 }
 
 /**
  * Dispatch VSC_USER_SETTINGS with the given detail object — mirrors exactly
- * what injector.js::injectUserSettings() does (injector.js lines 289-293).
+ * what injector.js::injectUserSettings() does after the Option A race fix:
+ * sets window.__VSC_injectedSettings BEFORE dispatching the event so that
+ * the settings are always recoverable even if the event is missed.
  */
 function dispatchUserSettingsEvent(detail) {
+  window.__VSC_injectedSettings = detail;
   window.dispatchEvent(new CustomEvent('VSC_USER_SETTINGS', { detail }));
 }
 

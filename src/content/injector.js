@@ -285,6 +285,11 @@ async function injectUserSettings() {
       });
     });
 
+    // Write settings to window property BEFORE dispatching the event so that
+    // storage-manager.js can recover them even if the VSC_USER_SETTINGS event
+    // fires before its listener is registered (race condition fix — Option A).
+    window.__VSC_injectedSettings = userSettings;
+
     // Inject settings into page context via custom event
     window.dispatchEvent(
       new CustomEvent('VSC_USER_SETTINGS', {

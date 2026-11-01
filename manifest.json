@@ -42,7 +42,7 @@
         "https://*/*",
         "file:///*"
       ],
-      "match_about_blank": true,
+      "match_about_blank": false,
       "exclude_matches": [
         "https://hangouts.google.com/*",
         "https://meet.google.com/*"
@@ -67,6 +67,7 @@
         "https://meet.google.com/*"
       ],
       "world": "MAIN",
+      "run_at": "document_end",
       "js": [
         "src/utils/constants.js",
         "src/utils/logger.js",
@@ -102,6 +103,7 @@
         "https://www.netflix.com/*"
       ],
       "world": "MAIN",
+      "run_at": "document_end",
       "js": [
         "src/site-handlers/scripts/netflix.js"
       ]
@@ -112,7 +114,6 @@
       "resources": [
         "src/styles/inject.css",
         "src/styles/shadow.css",
-        "src/module-loader.js",
         "src/core/*.js",
         "src/utils/*.js",
         "src/ui/*.js",

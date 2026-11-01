@@ -96,11 +96,15 @@ const runner = new SimpleTestRunner();
 runner.test(
   '[Finding 5] window.VSC.Constants object reference must be stable across double-injection (RED: broken guard always resets)',
   () => {
-    const ctx = {};
+    const windowSurrogate = {};
+    const documentSurrogate = {
+      head: { appendChild: () => {} },
+      createElement: (tag) => ({ id: '', style: {}, textContent: '', tag }),
+    };
 
     // First injection
-    runConstantsInitBroken(ctx);
-    const refAfterFirstInjection = ctx.VSC.Constants;
+    evalConstantsSource(windowSurrogate, documentSurrogate);
+    const refAfterFirstInjection = windowSurrogate.VSC.Constants;
 
     assert.exists(
       refAfterFirstInjection.DEFAULT_SETTINGS,
@@ -108,12 +112,9 @@ runner.test(
     );
 
     // Second injection — simulates content script injected again in same frame
-    runConstantsInitBroken(ctx);
-    const refAfterSecondInjection = ctx.VSC.Constants;
+    evalConstantsSource(windowSurrogate, documentSurrogate);
+    const refAfterSecondInjection = windowSurrogate.VSC.Constants;
 
-    // This assertion is EXPECTED TO FAIL with the current code because
-    // line 9 replaces ctx.VSC.Constants with a new {} on every call, so
-    // refAfterFirstInjection !== refAfterSecondInjection.
     assert.equal(
       refAfterFirstInjection,
       refAfterSecondInjection,
@@ -130,22 +131,22 @@ runner.test(
 runner.test(
   '[Finding 5] cached DEFAULT_SETTINGS reference must remain live after double-injection (RED: stale object after broken guard)',
   () => {
-    const ctx = {};
+    const windowSurrogate = {};
+    const documentSurrogate = {
+      head: { appendChild: () => {} },
+      createElement: (tag) => ({ id: '', style: {}, textContent: '', tag }),
+    };
 
     // First injection
-    runConstantsInitBroken(ctx);
-    const capturedDefaultSettings = ctx.VSC.Constants.DEFAULT_SETTINGS;
+    evalConstantsSource(windowSurrogate, documentSurrogate);
+    const capturedDefaultSettings = windowSurrogate.VSC.Constants.DEFAULT_SETTINGS;
 
     // Second injection
-    runConstantsInitBroken(ctx);
+    evalConstantsSource(windowSurrogate, documentSurrogate);
 
-    // With the broken guard, line 9 replaces the Constants object, then the
-    // guard body always runs and writes a NEW DEFAULT_SETTINGS into the new
-    // object.  The previously captured reference now points to the orphaned
-    // old object, which is no longer ctx.VSC.Constants.DEFAULT_SETTINGS.
     assert.equal(
       capturedDefaultSettings,
-      ctx.VSC.Constants.DEFAULT_SETTINGS,
+      windowSurrogate.VSC.Constants.DEFAULT_SETTINGS,
       'DEFAULT_SETTINGS reference captured before second injection must equal the live reference after (no object replacement)',
     );
   },
@@ -160,24 +161,23 @@ runner.test(
 runner.test(
   '[Finding 5] custom property set after first injection must survive second injection (RED: body always re-runs)',
   () => {
-    const ctx = {};
+    const windowSurrogate = {};
+    const documentSurrogate = {
+      head: { appendChild: () => {} },
+      createElement: (tag) => ({ id: '', style: {}, textContent: '', tag }),
+    };
 
     // First injection
-    runConstantsInitBroken(ctx);
+    evalConstantsSource(windowSurrogate, documentSurrogate);
 
     // Simulate downstream code adding a runtime property to Constants
-    ctx.VSC.Constants._testSentinel = 'sentinel-value';
+    windowSurrogate.VSC.Constants._testSentinel = 'sentinel-value';
 
     // Second injection — must NOT wipe Constants or re-run the body
-    runConstantsInitBroken(ctx);
+    evalConstantsSource(windowSurrogate, documentSurrogate);
 
-    // With the current broken code:
-    //   line 9  → ctx.VSC.Constants = {}         (sentinel gone)
-    //   line 12 → guard is true (DEFAULT_SETTINGS undefined on new {})
-    //   body re-runs → writes new DEFAULT_SETTINGS, LOG_LEVELS, etc.
-    // _testSentinel is lost, so the assertion fails.
     assert.equal(
-      ctx.VSC.Constants._testSentinel,
+      windowSurrogate.VSC.Constants._testSentinel,
       'sentinel-value',
       'Runtime property set on Constants after first injection must survive second injection',
     );

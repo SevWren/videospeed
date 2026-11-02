@@ -62,6 +62,8 @@ meet.google.com`.replace(regStrip, ''),
     controlGifs: true,
     lastGifSpeed: 1.0,
     gifSpeedStep: 0.1,
+    hoverActivatesVideoTarget: true, // enabled by default
+    hoverActivatesGifTarget: false, // disabled by default
   };
 
   window.VSC.Constants.DEFAULT_SETTINGS = DEFAULT_SETTINGS;
@@ -118,6 +120,9 @@ meet.google.com`.replace(regStrip, ''),
   window.VSC.Constants.GIF_FRAME_CACHE_LIMIT_BYTES = 50 * 1024 * 1024; // 50 MB soft per-GIF
   window.VSC.Constants.GIF_MIN_SIZE_PX = 20;
   window.VSC.Constants.GIF_SPEED_SAVE_DEBOUNCE_MS = 500;
+
+  // Hover-to-activate dwell time
+  window.VSC.Constants.HOVER_DWELL_MS = 200;
 } // End conditional loading check
 
 // Global variables available for both browser and testing

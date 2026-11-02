@@ -358,4 +358,26 @@ runner.test('VideoSpeedConfig addGifElement does not duplicate elements', () => 
   assert.equal(config.getGifElements().length, 1, 'Set must deduplicate; length must remain 1');
 });
 
+// ── T1: hoverActivatesVideoTarget / hoverActivatesGifTarget defaults (issue #32) ──
+
+runner.test('DEFAULT_SETTINGS.hoverActivatesVideoTarget must be true', () => {
+  // RED: fails until hoverActivatesVideoTarget: true is added to DEFAULT_SETTINGS.
+  const defaults = window.VSC.Constants.DEFAULT_SETTINGS;
+  assert.equal(
+    defaults.hoverActivatesVideoTarget,
+    true,
+    'DEFAULT_SETTINGS.hoverActivatesVideoTarget must be true (hover-to-activate is on by default)',
+  );
+});
+
+runner.test('DEFAULT_SETTINGS.hoverActivatesGifTarget must be false', () => {
+  // RED: fails until hoverActivatesGifTarget: false is added to DEFAULT_SETTINGS.
+  const defaults = window.VSC.Constants.DEFAULT_SETTINGS;
+  assert.equal(
+    defaults.hoverActivatesGifTarget,
+    false,
+    'DEFAULT_SETTINGS.hoverActivatesGifTarget must be false (hover-to-activate for GIFs is off by default)',
+  );
+});
+
 export { runner as settingsTestRunner };

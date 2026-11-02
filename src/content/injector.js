@@ -208,6 +208,8 @@ function setupMessageBridge() {
     'blacklist',
     'enabled',
     'gifSpeedStep',
+    'hoverActivatesVideoTarget',
+    'hoverActivatesGifTarget',
   ]);
 
   chrome.storage.onChanged.addListener((changes, areaName) => {

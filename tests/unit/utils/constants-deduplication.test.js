@@ -297,6 +297,38 @@ runner.test(
 );
 
 // ---------------------------------------------------------------------------
+// T1 — HOVER_DWELL_MS constant (issue #32)
+// ---------------------------------------------------------------------------
+
+/**
+ * RED test: HOVER_DWELL_MS must exist on window.VSC.Constants and equal 200.
+ *
+ * Fails until HOVER_DWELL_MS: 200 is added to constants.js.
+ */
+runner.test(
+  '[T1] HOVER_DWELL_MS must be defined on window.VSC.Constants and equal 200',
+  () => {
+    const windowSurrogate = {};
+    const documentSurrogate = {
+      head: { appendChild: () => {} },
+      createElement: (tag) => ({ id: '', style: {}, textContent: '', tag }),
+    };
+
+    evalConstantsSource(windowSurrogate, documentSurrogate);
+
+    assert.exists(
+      windowSurrogate.VSC.Constants.HOVER_DWELL_MS,
+      'HOVER_DWELL_MS must be defined on window.VSC.Constants',
+    );
+    assert.equal(
+      windowSurrogate.VSC.Constants.HOVER_DWELL_MS,
+      200,
+      'HOVER_DWELL_MS must equal 200',
+    );
+  },
+);
+
+// ---------------------------------------------------------------------------
 // Export for test runner
 // ---------------------------------------------------------------------------
 

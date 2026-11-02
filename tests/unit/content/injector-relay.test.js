@@ -31,6 +31,7 @@ const USER_CONTROLLED_KEYS = new Set([
   'keyBindings', 'rememberSpeed', 'forceLastSavedSpeed', 'audioBoolean',
   'startHidden', 'controllerOpacity', 'controllerButtonSize', 'logLevel',
   'blacklist', 'enabled', 'gifSpeedStep',
+  'hoverActivatesVideoTarget', 'hoverActivatesGifTarget',
 ]);
 
 function buildRelayPatch(changes) {
@@ -211,6 +212,31 @@ runner.test('non-sync area produces no relay dispatch', () => {
   cleanupChromeMock();
 
   assert.equal(dispatched, false, 'VSC_USER_SETTINGS must not be dispatched for non-sync area');
+});
+
+// ── T1: hoverActivatesVideoTarget / hoverActivatesGifTarget in USER_CONTROLLED_KEYS (issue #32) ──
+// Structural source test (CS-3 exception): injector.js is a content script that cannot be
+// loaded as an ES module in JSDOM.  We read the production source directly and assert that
+// both keys appear inside the _VSC_USER_CONTROLLED_KEYS Set literal.
+
+runner.test('[T1] injector.js _VSC_USER_CONTROLLED_KEYS must contain hoverActivatesVideoTarget', () => {
+  const src = readFileSync(join(__dirname, '../../../src/content/injector.js'), 'utf8');
+  assert.equal(
+    src.includes("'hoverActivatesVideoTarget'"),
+    true,
+    "'hoverActivatesVideoTarget' must be present in injector.js _VSC_USER_CONTROLLED_KEYS — " +
+    'without it, Options-page changes for this setting silently fail to relay to open tabs',
+  );
+});
+
+runner.test('[T1] injector.js _VSC_USER_CONTROLLED_KEYS must contain hoverActivatesGifTarget', () => {
+  const src = readFileSync(join(__dirname, '../../../src/content/injector.js'), 'utf8');
+  assert.equal(
+    src.includes("'hoverActivatesGifTarget'"),
+    true,
+    "'hoverActivatesGifTarget' must be present in injector.js _VSC_USER_CONTROLLED_KEYS — " +
+    'without it, Options-page changes for this setting silently fail to relay to open tabs',
+  );
 });
 
 export default runner;

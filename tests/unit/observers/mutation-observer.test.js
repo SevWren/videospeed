@@ -29,11 +29,11 @@ runner.test('VideoMutationObserver should process element nodes', () => {
     mockOnVideoRemoved.push(video);
   };
 
-  const observer = new window.VSC.VideoMutationObserver(
-    mockConfig,
+  const observer = new window.VSC.VideoMutationObserver({
+    config: mockConfig,
     onVideoFound,
-    onVideoRemoved
-  );
+    onVideoRemoved,
+  });
 
   const videoElement = document.createElement('video');
   const divElement = document.createElement('div');
@@ -66,11 +66,11 @@ runner.test('VideoMutationObserver should skip non-element nodes', () => {
     mockOnVideoRemoved.push(video);
   };
 
-  const observer = new window.VSC.VideoMutationObserver(
-    mockConfig,
+  const observer = new window.VSC.VideoMutationObserver({
+    config: mockConfig,
     onVideoFound,
-    onVideoRemoved
-  );
+    onVideoRemoved,
+  });
 
   const textNode = document.createTextNode('text');
   const commentNode = document.createComment('comment');
@@ -104,11 +104,11 @@ runner.test('VideoMutationObserver should handle removed video elements', () => 
     mockOnVideoRemoved.push(video);
   };
 
-  const observer = new window.VSC.VideoMutationObserver(
-    mockConfig,
+  const observer = new window.VSC.VideoMutationObserver({
+    config: mockConfig,
     onVideoFound,
-    onVideoRemoved
-  );
+    onVideoRemoved,
+  });
 
   const videoElement = document.createElement('video');
   videoElement.vsc = { remove: () => { } };
@@ -139,11 +139,11 @@ runner.test('VideoMutationObserver should handle null and undefined nodes gracef
     mockOnVideoRemoved.push(video);
   };
 
-  const observer = new window.VSC.VideoMutationObserver(
-    mockConfig,
+  const observer = new window.VSC.VideoMutationObserver({
+    config: mockConfig,
     onVideoFound,
-    onVideoRemoved
-  );
+    onVideoRemoved,
+  });
 
   const mutation = {
     type: 'childList',
@@ -173,11 +173,11 @@ runner.test('VideoMutationObserver should detect video elements in shadow DOM', 
     mockOnVideoRemoved.push(video);
   };
 
-  const observer = new window.VSC.VideoMutationObserver(
-    mockConfig,
+  const observer = new window.VSC.VideoMutationObserver({
+    config: mockConfig,
     onVideoFound,
-    onVideoRemoved
-  );
+    onVideoRemoved,
+  });
 
   const host = document.createElement('div');
   const shadowRoot = host.attachShadow({ mode: 'open' });
@@ -211,11 +211,11 @@ runner.test('VideoMutationObserver should detect nested video elements', () => {
     mockOnVideoRemoved.push(video);
   };
 
-  const observer = new window.VSC.VideoMutationObserver(
-    mockConfig,
+  const observer = new window.VSC.VideoMutationObserver({
+    config: mockConfig,
     onVideoFound,
-    onVideoRemoved
-  );
+    onVideoRemoved,
+  });
 
   const container = document.createElement('div');
   const innerDiv = document.createElement('div');
@@ -238,28 +238,23 @@ runner.test('VideoMutationObserver should detect nested video elements', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Lines 259, 261-262 — GIF removal path in checkForVideoAndShadowRoot
-//
-// When an IMG node with a gifController (that is not pending) is removed
-// from the DOM and its canvas is NOT in the DOM, onGifRemoved must be called.
-// This exercises the branch at lines 259-262.
+// GIF removal path in checkForVideoAndShadowRoot
 // ─────────────────────────────────────────────────────────────────────────────
 
 runner.test('VideoMutationObserver calls onGifRemoved when gif IMG is removed and canvas not in DOM', () => {
   const mockConfig = { settings: { audioBoolean: false } };
   const removedGifs = [];
 
-  const onGifFound = () => {};
+  const onGifAdded = () => {};
   const onGifRemoved = (node) => removedGifs.push(node);
 
-  const observer = new window.VSC.VideoMutationObserver(
-    mockConfig,
-    () => {},
-    () => {},
-    null,
-    onGifFound,
-    onGifRemoved
-  );
+  const observer = new window.VSC.VideoMutationObserver({
+    config: mockConfig,
+    onVideoFound: () => {},
+    onVideoRemoved: () => {},
+    onGifAdded,
+    onGifRemoved,
+  });
 
   // Temporarily install a GifObserver mock so isGifElement returns true
   const origGifObserver = window.VSC.GifObserver;
@@ -303,14 +298,12 @@ runner.test('VideoMutationObserver does NOT call onGifRemoved when gifController
   const removedGifs = [];
   const onGifRemoved = (node) => removedGifs.push(node);
 
-  const observer = new window.VSC.VideoMutationObserver(
-    mockConfig,
-    () => {},
-    () => {},
-    null,
-    null,
-    onGifRemoved
-  );
+  const observer = new window.VSC.VideoMutationObserver({
+    config: mockConfig,
+    onVideoFound: () => {},
+    onVideoRemoved: () => {},
+    onGifRemoved,
+  });
 
   const img = document.createElement('img');
   img.src = 'https://example.com/animation.gif';
@@ -329,16 +322,16 @@ runner.test('VideoMutationObserver does NOT call onGifRemoved when gifController
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Lines 334-336 — onDocumentReplaced() logs a warning
+// onDocumentReplaced() logs a warning
 // ─────────────────────────────────────────────────────────────────────────────
 
 runner.test('VideoMutationObserver onDocumentReplaced() triggers document-replacement handling', () => {
   const mockConfig = { settings: {} };
-  const observer = new window.VSC.VideoMutationObserver(
-    mockConfig,
-    () => {},
-    () => {}
-  );
+  const observer = new window.VSC.VideoMutationObserver({
+    config: mockConfig,
+    onVideoFound: () => {},
+    onVideoRemoved: () => {},
+  });
 
   // onDocumentReplaced() calls window.VSC.logger.warn — capture it
   const warnCalls = [];
@@ -355,17 +348,17 @@ runner.test('VideoMutationObserver onDocumentReplaced() triggers document-replac
   }
 
   assert.equal(threw, false, 'onDocumentReplaced() must not throw');
-  // The warn message is emitted (line 335)
+  // The warn message is emitted
   assert.equal(warnCalls.length, 1, 'onDocumentReplaced() must emit exactly one warning');
 });
 
 runner.test('document replacement mutation triggers onDocumentReplaced path', () => {
   const mockConfig = { settings: {} };
-  const observer = new window.VSC.VideoMutationObserver(
-    mockConfig,
-    () => {},
-    () => {}
-  );
+  const observer = new window.VSC.VideoMutationObserver({
+    config: mockConfig,
+    onVideoFound: () => {},
+    onVideoRemoved: () => {},
+  });
 
   // document.documentElement triggers the "document was replaced" branch
   const mutation = {
@@ -392,16 +385,16 @@ runner.test('document replacement mutation triggers onDocumentReplaced path', ()
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Lines 342-354 — stop() disconnects main observer and all shadow observers
+// stop() disconnects main observer and all shadow observers
 // ─────────────────────────────────────────────────────────────────────────────
 
 runner.test('stop() sets observer to null after disconnecting', () => {
   const mockConfig = { settings: {} };
-  const observer = new window.VSC.VideoMutationObserver(
-    mockConfig,
-    () => {},
-    () => {}
-  );
+  const observer = new window.VSC.VideoMutationObserver({
+    config: mockConfig,
+    onVideoFound: () => {},
+    onVideoRemoved: () => {},
+  });
 
   // Start the observer on the document so this.observer is set
   observer.start(document);
@@ -414,11 +407,11 @@ runner.test('stop() sets observer to null after disconnecting', () => {
 
 runner.test('stop() clears all shadow observers', () => {
   const mockConfig = { settings: {} };
-  const observer = new window.VSC.VideoMutationObserver(
-    mockConfig,
-    () => {},
-    () => {}
-  );
+  const observer = new window.VSC.VideoMutationObserver({
+    config: mockConfig,
+    onVideoFound: () => {},
+    onVideoRemoved: () => {},
+  });
 
   observer.start(document);
 
@@ -436,11 +429,11 @@ runner.test('stop() clears all shadow observers', () => {
 
 runner.test('stop() is safe to call when observer was never started', () => {
   const mockConfig = { settings: {} };
-  const observer = new window.VSC.VideoMutationObserver(
-    mockConfig,
-    () => {},
-    () => {}
-  );
+  const observer = new window.VSC.VideoMutationObserver({
+    config: mockConfig,
+    onVideoFound: () => {},
+    onVideoRemoved: () => {},
+  });
 
   // observer.observer is null — stop() must not throw
   let threw = false;
@@ -451,6 +444,28 @@ runner.test('stop() is safe to call when observer was never started', () => {
   }
 
   assert.equal(threw, false, 'stop() must not throw when observer was never started');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VideoMutationObserver accepts 4 arguments (backward compat) — this test in
+// the old integration test now documents the OPTIONS form explicitly
+// ─────────────────────────────────────────────────────────────────────────────
+
+runner.test('VideoMutationObserver accepts 4 arguments (backward compat)', () => {
+  // This test documents that the options form with 3 required keys works fine
+  // (it was previously an integration test that used positional args)
+  let threw = false;
+  try {
+    new window.VSC.VideoMutationObserver({
+      config: { settings: {} },
+      onVideoFound: () => {},
+      onVideoRemoved: () => {},
+      mediaObserver: null,
+    });
+  } catch (_e) {
+    threw = true;
+  }
+  assert.equal(threw, false, 'Constructor must accept options object with mediaObserver: null');
 });
 
 export { runner as mutationObserverTestRunner };

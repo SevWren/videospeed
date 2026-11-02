@@ -52,26 +52,32 @@ runner.test('VideoMutationObserver accepts 4 arguments (backward compat)', () =>
   if (!window.VSC.VideoMutationObserver) {
     return;
   }
-  const obs = new window.VSC.VideoMutationObserver(
-    { settings: { controlGifs: false }, getMediaElements: () => [], getGifElements: () => [] },
-    () => {},
-    () => {},
-    null
-  );
+  const obs = new window.VSC.VideoMutationObserver({
+    config: { settings: { controlGifs: false }, getMediaElements: () => [], getGifElements: () => [] },
+    onVideoFound: () => {},
+    onVideoRemoved: () => {},
+    mediaObserver: null,
+  });
   if (obs.onGifFound !== null) {
-    throw new Error('onGifFound should default to null');
+    throw new Error('onGifFound should default to null when onGifAdded is not provided');
   }
 });
 
-runner.test('GifFrameCache rejects an allocation that would exceed the global memory budget', () => {
-  const cache = window.VSC.GifFrameCache;
-  const budget = window.VSC.Constants.GIF_GLOBAL_MEMORY_BUDGET_BYTES;
-  const saved = cache._allocated;
-  cache._allocated = budget; // already at limit
-  const overBudgetResult = cache.tryAllocate(1);
-  cache._allocated = saved;
-  assert.false(overBudgetResult, 'tryAllocate should return false when allocation would exceed budget');
-});
+runner.test(
+  'GifFrameCache rejects an allocation that would exceed the global memory budget',
+  () => {
+    const cache = window.VSC.GifFrameCache;
+    const budget = window.VSC.Constants.GIF_GLOBAL_MEMORY_BUDGET_BYTES;
+    const saved = cache._allocated;
+    cache._allocated = budget; // already at limit
+    const overBudgetResult = cache.tryAllocate(1);
+    cache._allocated = saved;
+    assert.false(
+      overBudgetResult,
+      'tryAllocate should return false when allocation would exceed budget'
+    );
+  }
+);
 
 runner.test('GifObserver identifies an img element with a .gif src as a GIF element', () => {
   const img = document.createElement('img');
@@ -103,7 +109,10 @@ runner.test('GifFrameCache allows allocation when remaining budget is exactly me
   cache._allocated = budget - 100; // 100 bytes remain
   const result = cache.tryAllocate(100);
   cache._allocated = saved;
-  assert.true(result, 'tryAllocate should return true when bytes requested exactly fit remaining budget');
+  assert.true(
+    result,
+    'tryAllocate should return true when bytes requested exactly fit remaining budget'
+  );
 });
 
 export default runner;

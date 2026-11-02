@@ -1,6 +1,19 @@
 /**
- * GIF detection utilities for Video Speed Controller
- * Modular architecture using global variables
+ * GIF detection predicates for Video Speed Controller.
+ *
+ * This module provides two pure detection predicates:
+ *   - isGifSrc(src)      — returns true when a URL string identifies a GIF
+ *   - isGifElement(el)   — returns true when a DOM element is an animated GIF img
+ *
+ * These predicates have no side-effects: no MutationObserver, no event
+ * listeners, no subscriptions. The name "GifObserver" is kept on
+ * window.VSC.GifObserver for backward compatibility with call sites in
+ * mutation-observer.js and media-observer.js.
+ *
+ * Scanning GIFs in the DOM (including shadow roots) is the responsibility of
+ * MediaElementObserver.scanForGifs(), which is the canonical implementation.
+ *
+ * Modular architecture using global variables.
  */
 
 window.VSC = window.VSC || {};
@@ -36,24 +49,9 @@ if (!window.VSC.GifObserver) {
     return false;
   };
 
-  const detectGifsInDOM = (doc) => {
-    return Array.from(doc.querySelectorAll('img')).filter((img) => {
-      if (img.gifController || img.vscGifIgnore) {
-        return false;
-      }
-      if (!isGifElement(img)) {
-        return false;
-      }
-      if (img.naturalWidth > 0 && img.naturalHeight > 0) {
-        const w = img.naturalWidth || img.width || 0;
-        const h = img.naturalHeight || img.height || 0;
-        return (
-          w >= window.VSC.Constants.GIF_MIN_SIZE_PX && h >= window.VSC.Constants.GIF_MIN_SIZE_PX
-        );
-      }
-      return true;
-    });
-  };
+  // detectGifsInDOM was removed: it had zero production callers and had drifted
+  // from MediaElementObserver.scanForGifs(), which is the canonical scan path
+  // (including shadow DOM traversal and deduplication).
 
-  window.VSC.GifObserver = { isGifSrc, isGifElement, detectGifsInDOM };
+  window.VSC.GifObserver = { isGifSrc, isGifElement };
 }

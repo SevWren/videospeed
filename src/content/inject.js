@@ -12,6 +12,8 @@ class VideoSpeedExtension {
     this.mediaObserver = null;
     this.initialized = false;
     this._docInitialized = false;
+    // Bound SPA navigation handler — stored so cleanup() can remove it.
+    this._onSpaNavigate = null;
   }
 
   /**
@@ -70,6 +72,17 @@ class VideoSpeedExtension {
 
       this.logger.info('Video Speed Controller initialized successfully');
       this.initialized = true;
+
+      // SPA navigation — invalidate the cached site handler on route changes so the
+      // correct handler is re-detected after navigating within a SPA (closes #25).
+      // popstate covers back/forward navigation; yt-navigate-finish covers YouTube
+      // client-side navigation (more reliable than pushState wrapping on YouTube).
+      this._onSpaNavigate = () => {
+        this.siteHandlerManager.refresh();
+        this.logger.debug('SPA navigation detected — site handler cache invalidated');
+      };
+      window.addEventListener('popstate', this._onSpaNavigate);
+      window.addEventListener('yt-navigate-finish', this._onSpaNavigate);
 
       // Page visibility — stop all GIF loops when tab is backgrounded
       document.addEventListener('visibilitychange', () => {
@@ -168,7 +181,7 @@ class VideoSpeedExtension {
     const performChunkedScan = () => {
       try {
         // Use a lighter initial scan - avoid expensive shadow DOM traversal initially
-        const lightMedia = this.mediaObserver.scanForMediaLight(document);
+        const lightMedia = this.mediaObserver.scanForMedia(document, { includeShadow: false });
 
         lightMedia.forEach((media) => {
           this.onVideoFound(media, media.parentElement || media.parentNode);
@@ -301,14 +314,14 @@ class VideoSpeedExtension {
     this.mediaObserver = new this.MediaElementObserver(this.config, this.siteHandlerManager);
 
     // Mutation observer for dynamic content
-    this.mutationObserver = new this.VideoMutationObserver(
-      this.config,
-      (video, parent) => this.onVideoFound(video, parent),
-      (video) => this.onVideoRemoved(video),
-      this.mediaObserver,
-      (img, parent) => this.onGifFound(img, parent),
-      (img) => this.onGifRemoved(img)
-    );
+    this.mutationObserver = new this.VideoMutationObserver({
+      config: this.config,
+      onVideoFound: (video, parent) => this.onVideoFound(video, parent),
+      onVideoRemoved: (video) => this.onVideoRemoved(video),
+      mediaObserver: this.mediaObserver,
+      onGifAdded: (img, parent) => this.onGifFound(img, parent),
+      onGifRemoved: (img) => this.onGifRemoved(img),
+    });
   }
 
   /**
@@ -464,6 +477,13 @@ class VideoSpeedExtension {
    */
   cleanup() {
     try {
+      // Remove SPA navigation listeners registered in initialize()
+      if (this._onSpaNavigate) {
+        window.removeEventListener('popstate', this._onSpaNavigate);
+        window.removeEventListener('yt-navigate-finish', this._onSpaNavigate);
+        this._onSpaNavigate = null;
+      }
+
       if (this.mutationObserver) {
         this.mutationObserver.stop();
       }

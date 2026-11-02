@@ -6,12 +6,30 @@
 window.VSC = window.VSC || {};
 
 class VideoMutationObserver {
-  constructor(config, onVideoFound, onVideoRemoved, mediaObserver, onGifFound, onGifRemoved) {
+  /**
+   * @param {Object} options
+   * @param {Object}   options.config         - Extension config object
+   * @param {Function} options.onVideoFound   - Called with (videoEl, parentEl) when a video/audio is added
+   * @param {Function} options.onVideoRemoved - Called with (videoEl) when a video/audio is removed
+   * @param {Object}   [options.mediaObserver]  - MediaElementObserver instance (for recheckVideoElement)
+   * @param {Function} [options.onGifAdded]   - Called with (imgEl, parentEl) when a GIF img is added
+   * @param {Function} [options.onGifRemoved] - Called with (imgEl) when a GIF img is removed
+   */
+  constructor({ config, onVideoFound, onVideoRemoved, mediaObserver, onGifAdded, onGifRemoved } = {}) {
+    if (!config) {
+      throw new Error('VideoMutationObserver: required option "config" is missing');
+    }
+    if (typeof onVideoFound !== 'function') {
+      throw new Error('VideoMutationObserver: required option "onVideoFound" must be a function');
+    }
+    if (typeof onVideoRemoved !== 'function') {
+      throw new Error('VideoMutationObserver: required option "onVideoRemoved" must be a function');
+    }
     this.config = config;
     this.onVideoFound = onVideoFound;
     this.onVideoRemoved = onVideoRemoved;
-    this.mediaObserver = mediaObserver;
-    this.onGifFound = onGifFound || null;
+    this.mediaObserver = mediaObserver || null;
+    this.onGifFound = onGifAdded || null;
     this.onGifRemoved = onGifRemoved || null;
     this.observer = null;
     this.shadowObservers = new Map();

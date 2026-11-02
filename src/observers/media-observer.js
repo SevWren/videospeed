@@ -12,25 +12,34 @@ class MediaElementObserver {
   }
 
   /**
-   * Scan document for existing media elements
-   * @param {Document} document - Document to scan
+   * Scan document for existing media elements.
+   *
+   * The `includeShadow` flag controls shadow DOM traversal.  Pass
+   * `{ includeShadow: false }` for a cheap initial scan (e.g. at page load
+   * before expensive traversal is justified).  The default is `true`.
+   *
+   * @param {Document} doc - Document to scan
+   * @param {Object}  [options]
+   * @param {boolean} [options.includeShadow=true] - Whether to traverse shadow roots
    * @returns {Array<HTMLMediaElement>} Found media elements
    */
-  scanForMedia(document) {
+  scanForMedia(doc, { includeShadow = true } = {}) {
     const mediaElements = [];
     const audioEnabled = this.config.settings.audioBoolean;
     const mediaTagSelector = audioEnabled ? 'video,audio' : 'video';
 
     // Find regular media elements
-    const regularMedia = Array.from(document.querySelectorAll(mediaTagSelector));
+    const regularMedia = Array.from(doc.querySelectorAll(mediaTagSelector));
     mediaElements.push(...regularMedia);
 
-    // Find media elements in shadow DOMs recursively
-    const shadowMedia = this._findShadowMedia(document, mediaTagSelector);
-    mediaElements.push(...shadowMedia);
+    if (includeShadow) {
+      // Find media elements in shadow DOMs recursively
+      const shadowMedia = this._findShadowMedia(doc, mediaTagSelector);
+      mediaElements.push(...shadowMedia);
+    }
 
     // Find site-specific media elements
-    const siteSpecificMedia = this.siteHandler.detectSpecialVideos(document);
+    const siteSpecificMedia = this.siteHandler.detectSpecialVideos(doc);
     mediaElements.push(...siteSpecificMedia);
 
     // Filter out ignored videos
@@ -39,54 +48,22 @@ class MediaElementObserver {
     });
 
     window.VSC.logger.info(
-      `Found ${filteredMedia.length} media elements (${mediaElements.length} total, ${mediaElements.length - filteredMedia.length} filtered out)`
+      `Found ${filteredMedia.length} media elements` +
+      ` (${mediaElements.length} total, ${mediaElements.length - filteredMedia.length} filtered out,` +
+      ` includeShadow=${includeShadow})`
     );
     return filteredMedia;
   }
 
   /**
-   * Lightweight scan that avoids expensive shadow DOM traversal
-   * Used during initial load to avoid blocking page performance
-   * @param {Document} document - Document to scan
-   * @returns {Array<HTMLMediaElement>} Found media elements
-   */
-  scanForMediaLight(document) {
-    const mediaElements = [];
-    const audioEnabled = this.config.settings.audioBoolean;
-    const mediaTagSelector = audioEnabled ? 'video,audio' : 'video';
-
-    try {
-      // Only do basic DOM query, no shadow DOM traversal
-      const regularMedia = Array.from(document.querySelectorAll(mediaTagSelector));
-      mediaElements.push(...regularMedia);
-
-      // Find site-specific media elements (usually lightweight)
-      const siteSpecificMedia = this.siteHandler.detectSpecialVideos(document);
-      mediaElements.push(...siteSpecificMedia);
-
-      // Filter out ignored videos
-      const filteredMedia = mediaElements.filter((media) => {
-        return !this.siteHandler.shouldIgnoreVideo(media);
-      });
-
-      window.VSC.logger.info(
-        `Light scan found ${filteredMedia.length} media elements (${mediaElements.length} total, ${mediaElements.length - filteredMedia.length} filtered out)`
-      );
-      return filteredMedia;
-    } catch (error) {
-      window.VSC.logger.error(`Light media scan failed: ${error.message}`);
-      return [];
-    }
-  }
-
-  /**
-   * Scan iframes for media elements
-   * @param {Document} document - Document to scan
+   * Scan iframes for media elements.
+   * @param {Document} doc - Document to scan
    * @returns {Array<HTMLMediaElement>} Found media elements in iframes
+   * @private
    */
-  scanIframes(document) {
+  _scanIframes(doc) {
     const mediaElements = [];
-    const frameTags = document.getElementsByTagName('iframe');
+    const frameTags = doc.getElementsByTagName('iframe');
 
     Array.prototype.forEach.call(frameTags, (frame) => {
       // Ignore frames we don't have permission to access (different origin)
@@ -106,18 +83,19 @@ class MediaElementObserver {
   }
 
   /**
-   * Get media elements using site-specific container selectors
-   * @param {Document} document - Document to scan
+   * Get media elements using site-specific container selectors.
+   * @param {Document} doc - Document to scan
    * @returns {Array<HTMLMediaElement>} Found media elements
+   * @private
    */
-  scanSiteSpecificContainers(document) {
+  _scanSiteSpecificContainers(doc) {
     const mediaElements = [];
     const containerSelectors = this.siteHandler.getVideoContainerSelectors();
     const audioEnabled = this.config.settings.audioBoolean;
 
     containerSelectors.forEach((selector) => {
       try {
-        const containers = document.querySelectorAll(selector);
+        const containers = doc.querySelectorAll(selector);
         containers.forEach((container) => {
           const containerMedia = window.VSC.DomUtils.findMediaElements(container, audioEnabled);
           mediaElements.push(...containerMedia);
@@ -131,23 +109,25 @@ class MediaElementObserver {
   }
 
   /**
-   * Comprehensive scan for all media elements
-   * @param {Document} document - Document to scan
+   * Comprehensive scan for all media elements: regular, shadow, site-specific
+   * containers, and iframes.  Call this as a fallback when a light scan returns
+   * nothing.
+   * @param {Document} doc - Document to scan
    * @returns {Array<HTMLMediaElement>} All found media elements
    */
-  scanAll(document) {
+  scanAll(doc) {
     const allMedia = [];
 
-    // Regular scan
-    const regularMedia = this.scanForMedia(document);
+    // Regular scan including shadow DOM
+    const regularMedia = this.scanForMedia(doc);
     allMedia.push(...regularMedia);
 
     // Site-specific container scan
-    const containerMedia = this.scanSiteSpecificContainers(document);
+    const containerMedia = this._scanSiteSpecificContainers(doc);
     allMedia.push(...containerMedia);
 
     // Iframe scan
-    const iframeMedia = this.scanIframes(document);
+    const iframeMedia = this._scanIframes(doc);
     allMedia.push(...iframeMedia);
 
     // Remove duplicates
@@ -158,7 +138,7 @@ class MediaElementObserver {
   }
 
   /**
-   * Find media elements inside shadow DOMs recursively
+   * Find media elements inside shadow DOMs recursively.
    * @param {Document|ShadowRoot} root - Root to search
    * @param {string} selector - CSS selector
    * @returns {Array} Found elements
@@ -176,7 +156,7 @@ class MediaElementObserver {
   }
 
   /**
-   * Check if media element is valid for controller attachment
+   * Check if media element is valid for controller attachment.
    * @param {HTMLMediaElement} media - Media element to check
    * @returns {boolean} True if valid
    */
@@ -208,7 +188,7 @@ class MediaElementObserver {
   }
 
   /**
-   * Check if media element should start with hidden controller
+   * Check if media element should start with hidden controller.
    * @param {HTMLMediaElement} media - Media element to check
    * @returns {boolean} True if controller should start hidden
    */
@@ -247,7 +227,9 @@ class MediaElementObserver {
   }
 
   /**
-   * Scan document for GIF image elements
+   * Scan document for GIF image elements (including shadow roots).
+   * This is the canonical GIF scan implementation. detectGifsInDOM in
+   * gif-observer.js was removed as dead code; this method supersedes it.
    * @param {Document} doc - Document to scan
    * @returns {Array<HTMLImageElement>} Found GIF elements
    */
@@ -280,7 +262,7 @@ class MediaElementObserver {
   }
 
   /**
-   * Find the best parent element for controller positioning
+   * Find the best parent element for controller positioning.
    * @param {HTMLMediaElement} media - Media element
    * @returns {HTMLElement} Parent element for positioning
    */

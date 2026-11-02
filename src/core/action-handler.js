@@ -5,6 +5,15 @@
 
 window.VSC = window.VSC || {};
 
+/**
+ * Actions that are excluded from hover-target routing per ADR-0010.
+ * These actions operate on per-element persistent state (Marker) and must
+ * broadcast to all elements even when a Hover Target is active.
+ * This is an open category: add future stateful actions here rather than
+ * updating inline expressions in runAction / runGifAction.
+ */
+const HOVER_EXCLUDED_ACTIONS = new Set(['mark', 'jump']);
+
 class ActionHandler {
   constructor(config, eventManager) {
     this.config = config;
@@ -12,12 +21,12 @@ class ActionHandler {
     this._hoverTargetController = null;
     this._gifSpeedSaveTimer = null;
     this._gifSpeedPendingSpeed = undefined;
+    this._showTimer = null;
     this._visibilityFlushHandler = () => {
       if (document.visibilityState === 'hidden' && this._gifSpeedSaveTimer) {
         clearTimeout(this._gifSpeedSaveTimer);
         this._gifSpeedSaveTimer = null;
-        this.config.settings.lastGifSpeed = this._gifSpeedPendingSpeed;
-        this.config.save({ lastGifSpeed: this._gifSpeedPendingSpeed });
+        this.config.update({ lastGifSpeed: this._gifSpeedPendingSpeed });
         this._gifSpeedPendingSpeed = undefined;
       }
     };
@@ -34,6 +43,61 @@ class ActionHandler {
   }
 
   /**
+   * Resolve the target controller for an action dispatch.
+   * Implements the three-source resolution rule (ADR-0010):
+   *   click-derived > hover-derived > broadcast (null)
+   * Actions in HOVER_EXCLUDED_ACTIONS bypass the Hover Target and return null (broadcast).
+   * @param {string} action - The action name
+   * @param {Event|null} e - The originating event (optional)
+   * @returns {HTMLElement|null} The resolved target controller, or null to broadcast to all
+   */
+  _resolveTarget(action, e) {
+    let clickDerivedTarget = null;
+    if (e) {
+      try {
+        clickDerivedTarget = e.target.getRootNode().host;
+      } catch (_) {
+        /* cross-origin shadow root */
+      }
+    }
+    const hoverTarget = HOVER_EXCLUDED_ACTIONS.has(action) ? null : this._hoverTargetController;
+    return clickDerivedTarget ?? hoverTarget ?? null;
+  }
+
+  /**
+   * Show a controller temporarily (2 s auto-hide).
+   * Respects startHidden and vsc-manual; owns the _showTimer.
+   * Called by runAction, runGifAction, and delegated from EventManager.showController.
+   * @param {HTMLElement} controller - Controller shadow-host element
+   */
+  showController(controller) {
+    if (this.config.settings.startHidden && !controller.classList.contains('vsc-manual')) {
+      window.VSC.logger.info(
+        `Controller hidden by default - not showing temporarily (startHidden: ${this.config.settings.startHidden}, manual: ${controller.classList.contains('vsc-manual')})`
+      );
+      return;
+    }
+
+    window.VSC.logger.info(
+      `Showing controller temporarily (startHidden: ${this.config.settings.startHidden}, manual: ${controller.classList.contains('vsc-manual')})`
+    );
+    controller.style.removeProperty('display');
+    controller.style.removeProperty('visibility');
+    controller.style.removeProperty('opacity');
+    controller.classList.add('vsc-show');
+
+    if (this._showTimer) {
+      clearTimeout(this._showTimer);
+    }
+
+    this._showTimer = setTimeout(() => {
+      controller.classList.remove('vsc-show');
+      this._showTimer = null;
+      window.VSC.logger.debug('Hiding controller');
+    }, 2000);
+  }
+
+  /**
    * Execute an action on media elements
    * @param {string} action - Action to perform
    * @param {*} value - Action value
@@ -44,16 +108,6 @@ class ActionHandler {
 
     const mediaTags = this.config.getMediaElements();
 
-    // Get the controller that was used if called from a button press event
-    let targetController = null;
-    if (e) {
-      try {
-        targetController = e.target.getRootNode().host;
-      } catch (_rootErr) {
-        /* cross-origin shadow root */
-      }
-    }
-
     mediaTags.forEach((v, _index) => {
       const controller = v.vsc?.div;
 
@@ -61,25 +115,21 @@ class ActionHandler {
         return;
       }
 
-      // Resolve the target: click-derived > hover-derived > broadcast.
-      // mark and jump are excluded from hover activation (stateful operations that
-      // must broadcast when only a hover target — not a click — is the source).
-      const isMarkOrJump = action === 'mark' || action === 'jump';
-      const hoverTarget = !isMarkOrJump ? this._hoverTargetController : null;
-      const resolvedTarget = targetController ?? hoverTarget ?? null;
+      // Resolve the target via the shared three-source resolution rule (ADR-0010).
+      const resolvedTarget = this._resolveTarget(action, e);
 
       if (resolvedTarget && !(resolvedTarget === controller)) {
         return;
       }
 
-      this.eventManager.showController(controller);
+      this.showController(controller);
 
       if (!v.classList.contains('vsc-cancelled')) {
         this.executeAction(action, value, v, e);
       }
     });
 
-    // GIF speed control — parallel to video path, errors are isolated
+    // GIF speed control - parallel to video path, errors are isolated
     try {
       this.runGifAction(action, value, e);
     } catch (gifError) {
@@ -97,14 +147,6 @@ class ActionHandler {
     if (!gifElements || !gifElements.length) {
       return;
     }
-    let targetController = null;
-    if (e) {
-      try {
-        targetController = e.target.getRootNode().host;
-      } catch (_rootErr) {
-        return;
-      }
-    }
     gifElements.forEach((img) => {
       const gc = img.gifController;
       if (!gc || typeof gc.setSpeed !== 'function') {
@@ -113,19 +155,17 @@ class ActionHandler {
       if (!gc.div) {
         return;
       }
-      // Resolve the target: click-derived > hover-derived > broadcast.
-      // mark and jump are already no-ops for GIFs (no timeline), but the guard
+      // Resolve the target via the shared three-source resolution rule (ADR-0010).
+      // mark and jump are already no-ops for GIFs (no timeline), but the exclusion
       // documents intent and keeps parity with the video path.
-      const isMarkOrJump = action === 'mark' || action === 'jump';
-      const hoverTarget = !isMarkOrJump ? this._hoverTargetController : null;
-      const resolvedTarget = targetController ?? hoverTarget ?? null;
+      const resolvedTarget = this._resolveTarget(action, e);
 
       if (resolvedTarget && resolvedTarget !== gc.div) {
         return;
       }
       const showActions = ['faster', 'slower', 'reset', 'fast', 'pause', 'display'];
       if (showActions.includes(action)) {
-        this.eventManager.showController(gc.div);
+        this.showController(gc.div);
       }
       if (!img.vscGifIgnore && !img.gifController?.fetchFailed) {
         this.executeGifAction(action, value, img, e);
@@ -204,8 +244,7 @@ class ActionHandler {
       clearTimeout(this._gifSpeedSaveTimer);
     }
     this._gifSpeedSaveTimer = setTimeout(() => {
-      this.config.settings.lastGifSpeed = speed;
-      this.config.save({ lastGifSpeed: speed });
+      this.config.update({ lastGifSpeed: speed });
       this._gifSpeedSaveTimer = null;
       this._gifSpeedPendingSpeed = undefined;
     }, window.VSC.Constants.GIF_SPEED_SAVE_DEBOUNCE_MS || 500);
@@ -218,10 +257,13 @@ class ActionHandler {
     if (this._gifSpeedSaveTimer) {
       clearTimeout(this._gifSpeedSaveTimer);
       if (typeof this._gifSpeedPendingSpeed === 'number') {
-        this.config.settings.lastGifSpeed = this._gifSpeedPendingSpeed;
-        this.config.save({ lastGifSpeed: this._gifSpeedPendingSpeed });
+        this.config.update({ lastGifSpeed: this._gifSpeedPendingSpeed });
       }
       this._gifSpeedSaveTimer = null;
+    }
+    if (this._showTimer) {
+      clearTimeout(this._showTimer);
+      this._showTimer = null;
     }
   }
 
@@ -401,9 +443,6 @@ class ActionHandler {
     }
     speedIndicator.textContent = numericSpeed.toFixed(2);
 
-    // Update settings
-    this.config.settings.lastSpeed = numericSpeed;
-
     // Store per-video speed if rememberSpeed is enabled
     if (this.config.settings.rememberSpeed) {
       const videoSrc = video.currentSrc || video.src;
@@ -420,9 +459,9 @@ class ActionHandler {
       }
     }
 
-    // Save settings to storage for persistence
-    this.config.save({
-      lastSpeed: this.config.settings.lastSpeed,
+    // Update settings and persist atomically via update()
+    this.config.update({
+      lastSpeed: numericSpeed,
       speeds: this.config.settings.speeds,
     });
 
@@ -590,5 +629,8 @@ class ActionHandler {
 
 // Create singleton instance
 window.VSC.ActionHandler = ActionHandler;
+
+// Expose the constant on the constructor so tests and external code can reference it
+ActionHandler.HOVER_EXCLUDED_ACTIONS = HOVER_EXCLUDED_ACTIONS;
 
 // Global variables available for both browser and testing

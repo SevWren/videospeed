@@ -25,6 +25,7 @@ runner.test('runGifAction calls setSpeed on gif controller when controlGifs is t
       getGifElements: () => [fakeImg],
       getMediaElements: () => [],
       save: () => {},
+      update(patch) { Object.assign(this.settings, patch); return this.save(patch); },
     },
     { showController: () => {} }
   );
@@ -48,6 +49,7 @@ runner.test('executeGifAction slower reduces gif controller speed by the given v
       getGifElements: () => [],
       getMediaElements: () => [],
       save: () => {},
+      update(patch) { Object.assign(this.settings, patch); return this.save(patch); },
     },
     { showController: () => {} }
   );
@@ -81,6 +83,7 @@ runner.test('gif speed is persisted to lastGifSpeed when cleanup flushes pending
       getGifElements: () => [],
       getMediaElements: () => [],
       save: () => {},
+      update(patch) { Object.assign(this.settings, patch); return this.save(patch); },
     },
     { showController: () => {} }
   );

@@ -380,4 +380,49 @@ runner.test('DEFAULT_SETTINGS.hoverActivatesGifTarget must be false', () => {
   );
 });
 
+// ---------------------------------------------------------------------------
+// Change 3 RED: VideoSpeedConfig.update(patch)
+// These tests will be RED until update() is added to VideoSpeedConfig.
+// ---------------------------------------------------------------------------
+
+runner.test('config.update sets config.settings.lastSpeed AND calls save with the patch', async () => {
+  // RED: update() method does not exist yet — calling it throws TypeError.
+  const config = new window.VSC.VideoSpeedConfig();
+  await config.load();
+
+  const savedPatches = [];
+  const originalSet = window.VSC.StorageManager.set.bind(window.VSC.StorageManager);
+  window.VSC.StorageManager.set = async (data) => {
+    savedPatches.push(data);
+    return originalSet(data);
+  };
+
+  try {
+    await config.update({ lastSpeed: 2.0 });
+  } finally {
+    window.VSC.StorageManager.set = originalSet;
+  }
+
+  assert.equal(config.settings.lastSpeed, 2.0, 'config.settings.lastSpeed must be updated');
+  assert.true(savedPatches.length >= 1, 'StorageManager.set must have been called');
+});
+
+runner.test('config.update with multiple keys updates all of them atomically', async () => {
+  // RED: update() method does not exist yet.
+  const config = new window.VSC.VideoSpeedConfig();
+  await config.load();
+
+  const originalSet = window.VSC.StorageManager.set.bind(window.VSC.StorageManager);
+  window.VSC.StorageManager.set = async (data) => originalSet(data);
+
+  try {
+    await config.update({ lastSpeed: 3.0, rememberSpeed: true });
+  } finally {
+    window.VSC.StorageManager.set = originalSet;
+  }
+
+  assert.equal(config.settings.lastSpeed, 3.0, 'lastSpeed must be updated atomically');
+  assert.equal(config.settings.rememberSpeed, true, 'rememberSpeed must be updated atomically in the same call');
+});
+
 export { runner as settingsTestRunner };

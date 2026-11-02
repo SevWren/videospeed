@@ -109,6 +109,19 @@ if (!window.VSC.VideoSpeedConfig) {
     }
 
     /**
+     * Update settings in memory and persist to storage atomically.
+     * Replaces the scattered pattern of:
+     *   config.settings.X = value; config.save({ X: value });
+     * with a single call that enforces the write-then-persist invariant.
+     * @param {Object} patch - Partial settings object to merge in and persist
+     * @returns {Promise<void>}
+     */
+    update(patch) {
+      Object.assign(this.settings, patch);
+      return this.save(patch);
+    }
+
+    /**
      * Apply a settings patch received from the live relay (synchronous, no I/O)
      * @param {Object} patch - Partial settings object to merge in
      */

@@ -207,32 +207,36 @@ runner.test('EventManager cleanup clears active coolDown timer', () => {
   assert.equal(manager.coolDown, false, 'coolDown must be false after cleanup');
 });
 
-runner.test('EventManager cleanup clears active show timer', () => {
+runner.test('EventManager.showController delegates to actionHandler.showController', () => {
+  // After Change 4 (codebase-design deepening), showController implementation moved to
+  // ActionHandler. EventManager.showController is now a thin delegation wrapper.
+  // This test verifies that EventManager delegates correctly; the timer lives on the
+  // actionHandler, not on the EventManager.
   const stubConfig = {
     settings: { keyBindings: [], startHidden: false },
     getMediaElements: () => [],
     getGifElements: () => [],
   };
-  const stubActionHandler = {};
+
+  let showControllerCalled = false;
+  let showControllerArg = null;
+  const stubActionHandler = {
+    showController: (ctrl) => {
+      showControllerCalled = true;
+      showControllerArg = ctrl;
+    },
+  };
 
   const manager = new window.VSC.EventManager(stubConfig, stubActionHandler);
 
-  // Activate the show timer by calling showController
   const fakeController = {
-    classList: {
-      contains: () => false,
-      add: () => {},
-      remove: () => {},
-    },
+    classList: { contains: () => false, add: () => {}, remove: () => {} },
     style: { removeProperty: () => {} },
   };
   manager.showController(fakeController);
-  assert.equal(manager.timer !== null, true, 'timer should be set after showController');
 
-  manager.cleanup();
-
-  // After cleanup timer must be null (line 317: this.timer = null)
-  assert.equal(manager.timer, null, 'timer must be null after cleanup');
+  assert.equal(showControllerCalled, true, 'EventManager.showController must delegate to actionHandler.showController');
+  assert.equal(showControllerArg, fakeController, 'the same controller element must be passed through');
 });
 
 runner.test('EventManager handleKeydown deduplicates identical event signatures', () => {

@@ -778,4 +778,113 @@ runner.test('ActionHandler click-derived target wins over hover target', async (
   assert.equal(video1.playbackRate, 1.0, 'hover target (ctrl1) must be overridden by click target');
 });
 
+// ---------------------------------------------------------------------------
+// Change 1 RED: HOVER_EXCLUDED_ACTIONS constant
+// These tests will be RED until HOVER_EXCLUDED_ACTIONS is added to ActionHandler.
+// ---------------------------------------------------------------------------
+
+runner.test('HOVER_EXCLUDED_ACTIONS.has(mark) is true', () => {
+  // RED: HOVER_EXCLUDED_ACTIONS does not exist yet — accessing it throws ReferenceError.
+  const excluded = window.VSC.ActionHandler.HOVER_EXCLUDED_ACTIONS;
+  assert.exists(excluded, 'HOVER_EXCLUDED_ACTIONS must be defined on ActionHandler');
+  assert.true(excluded.has('mark'), 'mark must be in HOVER_EXCLUDED_ACTIONS');
+});
+
+runner.test('HOVER_EXCLUDED_ACTIONS.has(jump) is true', () => {
+  // RED: same as above — constant does not exist yet.
+  const excluded = window.VSC.ActionHandler.HOVER_EXCLUDED_ACTIONS;
+  assert.exists(excluded, 'HOVER_EXCLUDED_ACTIONS must be defined on ActionHandler');
+  assert.true(excluded.has('jump'), 'jump must be in HOVER_EXCLUDED_ACTIONS');
+});
+
+runner.test('HOVER_EXCLUDED_ACTIONS is a live Set — adding a new action changes behavior', () => {
+  // RED: constant does not exist yet.
+  // Proves the constant is a mutable data structure, not dead code.
+  const excluded = window.VSC.ActionHandler.HOVER_EXCLUDED_ACTIONS;
+  assert.exists(excluded, 'HOVER_EXCLUDED_ACTIONS must be defined on ActionHandler');
+  assert.false(excluded.has('display'), 'display must NOT be excluded initially');
+
+  // Add temporarily
+  excluded.add('display');
+  assert.true(excluded.has('display'), 'display must now be in the set after add');
+
+  // Clean up so other tests are unaffected
+  excluded.delete('display');
+  assert.false(excluded.has('display'), 'display must be removed after delete');
+});
+
+// ---------------------------------------------------------------------------
+// Change 2 RED: _resolveTarget(action, e) private method
+// These tests will be RED until _resolveTarget is extracted.
+// ---------------------------------------------------------------------------
+
+runner.test('_resolveTarget returns _hoverTargetController when set and action is not excluded', async () => {
+  // RED: _resolveTarget does not exist yet — calling it throws TypeError.
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  const eventManager = new window.VSC.EventManager(config, null);
+  const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+  const fakeCtrl = document.createElement('div');
+  actionHandler.setHoverTarget(fakeCtrl);
+
+  const result = actionHandler._resolveTarget('faster', null);
+  assert.equal(result, fakeCtrl, '_resolveTarget must return _hoverTargetController for non-excluded action');
+});
+
+runner.test('_resolveTarget returns null for mark even when _hoverTargetController is set', async () => {
+  // RED: _resolveTarget does not exist yet.
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  const eventManager = new window.VSC.EventManager(config, null);
+  const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+  const fakeCtrl = document.createElement('div');
+  actionHandler.setHoverTarget(fakeCtrl);
+
+  const result = actionHandler._resolveTarget('mark', null);
+  assert.equal(result, null, '_resolveTarget must return null for mark (hover-excluded action)');
+});
+
+runner.test('_resolveTarget returns null for jump even when _hoverTargetController is set', async () => {
+  // RED: _resolveTarget does not exist yet.
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  const eventManager = new window.VSC.EventManager(config, null);
+  const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+  const fakeCtrl = document.createElement('div');
+  actionHandler.setHoverTarget(fakeCtrl);
+
+  const result = actionHandler._resolveTarget('jump', null);
+  assert.equal(result, null, '_resolveTarget must return null for jump (hover-excluded action)');
+});
+
+runner.test('_resolveTarget returns click-derived target over hover target', async () => {
+  // RED: _resolveTarget does not exist yet.
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  const eventManager = new window.VSC.EventManager(config, null);
+  const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+  // Set a hover target
+  const hoverCtrl = document.createElement('div');
+  actionHandler.setHoverTarget(hoverCtrl);
+
+  // Build a shadow DOM so getRootNode().host resolves to clickCtrl
+  const clickCtrl = document.createElement('div');
+  document.body.appendChild(clickCtrl);
+  const shadow = clickCtrl.attachShadow({ mode: 'open' });
+  const btn = document.createElement('button');
+  shadow.appendChild(btn);
+
+  const fakeEvent = { target: btn };
+  const result = actionHandler._resolveTarget('faster', fakeEvent);
+  assert.equal(result, clickCtrl, 'click-derived target must win over hover target');
+});
+
 export { runner as actionHandlerTestRunner };

@@ -155,6 +155,30 @@ Why it cannot be tested in JSDOM:
 
 ---
 
+---
+
+## Wheel listener passive flag — KNOWN LIMITATION (VSC-PASSIVE-VIOLATION)
+
+`src/ui/controls.js:86-113 | KNOWN-LIMITATION | wheel handler calls event.preventDefault(); passive:false is required | log-1793580955578`
+
+**Evidence (TDD RED):**
+Test `tests/unit/ui/controls-wheel-passive.test.js` — "setupWheelHandler — wheel listener is registered with { passive: true } [EXPECTED RED]" — FAILS.
+Output confirms: the `wheel` listener on `#controller` is registered with `{ passive: false }`.
+
+**Why `{ passive: false }` is necessary:**
+`ControlsManager.setupWheelHandler` (controls.js:89) calls `event.preventDefault()` inside the wheel handler to prevent the page from scrolling while the user adjusts speed via the mouse wheel over the VSC controller. Marking the listener `passive: true` would silently ignore `preventDefault()` in Chrome, causing the page to scroll when the user intends to change speed — a direct UX regression.
+
+**Consequence:**
+Chrome emits `[Violation] Added non-passive event listener to a scroll-blocking 'wheel' event.` once per VideoController created on the page. On a YouTube watch page with 3 video elements, this produces 3 violations (log lines 23574, 23576, 23584 of www.youtube.com-1793580955578.log). This is a NEW occurrence — the previous session log (www.youtube.com-1793564406964.log) contained 0 wheel violations of this type.
+
+**Path to GREEN:**
+Replace `event.preventDefault()` with a CSS-based approach: set `touch-action: none` and `overscroll-behavior: none` on the `#controller` element via the shadow stylesheet, and remove the `event.preventDefault()` call. Then change the listener to `{ passive: true }`. This requires a coordinated CSS + JS change.
+
+**Regression test retained:**
+`tests/unit/ui/controls-wheel-passive.test.js` remains in the test suite as a permanently-failing sentinel. It must be kept RED until the CSS-based scroll-prevention approach is implemented.
+
+---
+
 ## Summary table
 
 | File | Lines | Classification | Refactor ticket? |

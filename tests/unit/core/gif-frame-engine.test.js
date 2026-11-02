@@ -89,4 +89,13 @@ runner.test('GifFrameCache: budget fully recovered after allocation + release', 
   if (final !== 0) throw new Error(`Expected _allocated=0 after round-trip, got ${final}`);
 });
 
+runner.test('GifFrameCache: confirmAllocation is callable and returns undefined (no-op)', () => {
+  const cache = window.VSC.GifFrameCache;
+  // confirmAllocation is a no-op per ADR; calling it must not throw and must return undefined
+  const result = cache.confirmAllocation(1024 * 1024);
+  if (result !== undefined) {
+    throw new Error(`Expected confirmAllocation to return undefined, got ${result}`);
+  }
+});
+
 export default runner;

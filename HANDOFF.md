@@ -1,3 +1,39 @@
+# Session Handoff — Path B CSP Fix
+
+**Date:** 2026-11-01
+**Branch at handoff:** master (after fix/path-b-world-main merges)
+**Test status:** 160/160 unit + integration (plus manifest-validator: 5 tests)
+
+## What this session fixed
+
+CSP injection bug (issue #12, #18): DOM `<script src="chrome-extension://...">` injection
+was blocked by YouTube's page CSP. Fixed by adding `"world":"MAIN"` to the `content_scripts`
+manifest declaration (Chrome 111+). Chrome handles injection natively, bypassing page CSP
+entirely. No new permissions needed.
+
+## Key files changed
+
+- `manifest.json`: +world:MAIN content_scripts block (26 modules + inject.js); +Netflix block; min_chrome "111"
+- `src/content/injector.js`: removed DOM injection functions; kept bridge (storage relay, message passing, GIF proxy)
+- `tests/unit/manifest/permissions.test.js`: NEW — manifest contract RED/GREEN test
+- `scripts/check-manifest.js`: NEW — manifest contract validator (pre-commit hook candidate)
+- `tests/fixtures/csp-page.html`: NEW — CSP-strict fixture for e2e regression tests
+
+## Open threads
+
+- Issue #12: Close once user verifies zero CSP errors on YouTube
+- Issue #18: Close when PR lands
+- Issues #13, #14, #15, #17, PR #16: Closed as wontfix/superseded
+- Over-injection into `accounts.youtube.com`: `shouldInjectInCurrentFrame()` returns true
+  for cross-origin first-party sub-frames — still produces an error if the bridge setup
+  fails there. Not a blocker but tracked as a known gap.
+- `main-copy` branch: 23 commits ahead of master with ESLint clean, PR template, coding
+  standards scaffold. Merge path: `fix/forensic-report-e3-sd02` → `main-copy` → `master`.
+
+---
+
+[Previous handoff content follows]
+
 # Video Speed Controller — Full Session Handoff Document
 
 **Repository**: https://github.com/SevWren/videospeed

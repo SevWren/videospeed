@@ -293,6 +293,10 @@ async function save_options() {
     const gifSpeedStepEl = document.getElementById('gifSpeedStep');
     const controlGifs = controlGifsEl ? controlGifsEl.checked : true;
     const gifSpeedStep = gifSpeedStepEl ? (parseFloat(gifSpeedStepEl.value) || 0.1) : 0.1;
+    const hoverActivatesVideoTargetEl = document.getElementById('hoverActivatesVideoTarget');
+    const hoverActivatesGifTargetEl = document.getElementById('hoverActivatesGifTarget');
+    const hoverActivatesVideoTarget = hoverActivatesVideoTargetEl ? hoverActivatesVideoTargetEl.checked : true;
+    const hoverActivatesGifTarget = hoverActivatesGifTargetEl ? hoverActivatesGifTargetEl.checked : false;
 
     // Clean up legacy keys
     await chrome.storage.sync.remove([
@@ -328,6 +332,8 @@ async function save_options() {
       controlGifs: controlGifs,
       gifSpeedStep: Math.min(Math.max(gifSpeedStep, 0.01), 1.0),
       lastGifSpeed: window.VSC.videoSpeedConfig?.settings?.lastGifSpeed ?? 1.0,
+      hoverActivatesVideoTarget: hoverActivatesVideoTarget,
+      hoverActivatesGifTarget: hoverActivatesGifTarget,
     };
 
     await window.VSC.videoSpeedConfig.save(settingsToSave);
@@ -389,6 +395,10 @@ async function restore_options() {
     if (controlGifsInput) controlGifsInput.checked = storage.controlGifs !== false;
     const gifSpeedStepInput = document.getElementById('gifSpeedStep');
     if (gifSpeedStepInput) gifSpeedStepInput.value = (typeof storage.gifSpeedStep === 'number' && storage.gifSpeedStep > 0) ? storage.gifSpeedStep.toFixed(2) : '0.10';
+    const hoverActivatesVideoTargetInput = document.getElementById('hoverActivatesVideoTarget');
+    if (hoverActivatesVideoTargetInput) hoverActivatesVideoTargetInput.checked = storage.hoverActivatesVideoTarget !== false;
+    const hoverActivatesGifTargetInput = document.getElementById('hoverActivatesGifTarget');
+    if (hoverActivatesGifTargetInput) hoverActivatesGifTargetInput.checked = storage.hoverActivatesGifTarget === true;
 
     // Process key bindings
     const keyBindings = storage.keyBindings || window.VSC.Constants.DEFAULT_SETTINGS.keyBindings;

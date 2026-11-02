@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CSP Strict Test Fixture</title>
+</head>
+<body>
+  <h1>CSP Strict Test Fixture</h1>
+  <p>
+    This page enforces a strict Content-Security-Policy that blocks
+    <code>chrome-extension://</code> script sources. It is used as the e2e
+    feedback loop to verify that the Path B (<code>world:"MAIN"</code>)
+    injection strategy works without relying on script-src allowlisting.
+  </p>
+  <video id="test-video" controls width="640" height="360">
+    <source src="" type="video/mp4" />
+    Your browser does not support the video element.
+  </video>
+</body>
+</html>

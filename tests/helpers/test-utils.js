@@ -269,11 +269,22 @@ export class SimpleTestRunner {
     this.tests.push({ name, fn });
   }
 
+  skip(name) {
+    this.tests.push({ name, fn: null, skipped: true });
+  }
+
   async run() {
     let passed = 0;
     let failed = 0;
+    let skipped = 0;
 
     for (const test of this.tests) {
+      if (test.skipped) {
+        console.log(`⏭ SKIP ${test.name}`);
+        skipped++;
+        continue;
+      }
+
       try {
         // Run before each hooks
         for (const hook of this.beforeEachHooks) {
@@ -296,9 +307,9 @@ export class SimpleTestRunner {
       }
     }
 
-    console.log(`\nResults: ${passed} passed, ${failed} failed`);
+    console.log(`\nResults: ${passed} passed, ${failed} failed, ${skipped} skipped`);
     console.groupEnd();
 
-    return { passed, failed };
+    return { passed, failed, skipped };
   }
 }

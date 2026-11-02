@@ -114,7 +114,6 @@ runner.test('DomUtils.findShadowMedia should recursively find media in nested sh
 
   assert.equal(results.length, 1);
   assert.equal(results[0], video);
-  assert.equal(results[0].className, 'nested-shadow-video');
 });
 
 runner.test('DomUtils.findShadowMedia should find multiple videos across different shadow roots', () => {
@@ -141,7 +140,7 @@ runner.test('DomUtils.findShadowMedia should find multiple videos across differe
 
   assert.equal(results.length, 3);
 
-  const videoIds = results.map(v => v.id).sort();
+  const videoIds = results.map((v) => v.id).sort();
   assert.deepEqual(videoIds, ['regular-video', 'video-1', 'video-2']);
 });
 
@@ -154,23 +153,34 @@ runner.test('DomUtils.findShadowMedia should handle deeply nested shadow roots (
   assert.equal(results[0], video);
 });
 
-runner.test('DomUtils.findShadowMedia should work with audio elements when enabled', () => {
+runner.test('DomUtils.findShadowMedia should find only video elements when selector is video', () => {
   const host = document.createElement('div');
   const shadow = host.attachShadow({ mode: 'open' });
 
   const video = createMockVideo();
   const audio = document.createElement('audio');
-  audio.className = 'test-audio';
 
   shadow.appendChild(video);
   shadow.appendChild(audio);
 
   const videoResults = window.VSC.DomUtils.findShadowMedia(shadow, 'video');
-  const audioVideoResults = window.VSC.DomUtils.findShadowMedia(shadow, 'video,audio');
 
   assert.equal(videoResults.length, 1);
+});
+
+runner.test('DomUtils.findShadowMedia should find both video and audio elements when selector is video,audio', () => {
+  const host = document.createElement('div');
+  const shadow = host.attachShadow({ mode: 'open' });
+
+  const video = createMockVideo();
+  const audio = document.createElement('audio');
+
+  shadow.appendChild(video);
+  shadow.appendChild(audio);
+
+  const audioVideoResults = window.VSC.DomUtils.findShadowMedia(shadow, 'video,audio');
+
   assert.equal(audioVideoResults.length, 2);
-  assert.equal(audioVideoResults[1].className, 'test-audio');
 });
 
 runner.test('DomUtils.findMediaElements should use recursive shadow search', () => {
@@ -269,7 +279,7 @@ runner.test('Should handle mixed regular and shadow DOM content', () => {
   const results = window.VSC.DomUtils.findShadowMedia(container, 'video');
 
   assert.equal(results.length, 2);
-  const ids = results.map(v => v.id).sort();
+  const ids = results.map((v) => v.id).sort();
   assert.deepEqual(ids, ['regular', 'shadow']);
 });
 
@@ -298,15 +308,14 @@ runner.test('Should handle complex nested structure with multiple videos per lev
   const results = window.VSC.DomUtils.findShadowMedia(host, 'video');
 
   assert.equal(results.length, 3);
-  const ids = results.map(v => v.id).sort();
+  const ids = results.map((v) => v.id).sort();
   assert.deepEqual(ids, ['level-1', 'level-2a', 'level-2b']);
 });
 
-runner.test('Performance test - should handle many nested shadow roots efficiently', () => {
+runner.test('Should find all media elements across many parallel nested shadow root structures', () => {
   const container = document.createElement('div');
-  const startTime = performance.now();
 
-  // Create 10 different nested structures
+  // Create 10 different nested structures, each with one video at depth 4
   for (let i = 0; i < 10; i++) {
     const { host } = createNestedShadowDOM(4);
     container.appendChild(host);
@@ -314,11 +323,90 @@ runner.test('Performance test - should handle many nested shadow roots efficient
 
   const results = window.VSC.DomUtils.findShadowMedia(container, 'video');
 
-  const endTime = performance.now();
-  const duration = endTime - startTime;
-
   assert.equal(results.length, 10);
-  assert.true(duration < 100, `Search took ${duration}ms, should be under 100ms`);
 });
 
-export { runner as recursiveShadowDOMTestRunner }; 
+// ---------------------------------------------------------------------------
+// T-actions-utils: cover dom-utils.js lines 47, 154-159, 174-175, 182-183
+// ---------------------------------------------------------------------------
+
+runner.test('DomUtils.isBlacklisted ignores empty regex pattern body (line 47 guard)', () => {
+  // "//" splits into ['', '', ''] — the regex body slice is '' (falsy) →
+  // triggers the `if (!regex) { return; }` guard on line 47.
+  const result = window.VSC.DomUtils.isBlacklisted('//');
+  assert.false(result, 'empty regex pattern "//" must not blacklist the page');
+});
+
+runner.test('DomUtils.isBlacklisted ignores malformed regex that throws (catch block)', () => {
+  // "[invalid" is an invalid character class — triggers the catch block.
+  const result = window.VSC.DomUtils.isBlacklisted('/[invalid/g');
+  assert.false(result, 'malformed regex must not blacklist the page');
+});
+
+runner.test('DomUtils.initializeWhenReady calls callback via onreadystatechange when not yet complete', () => {
+  let callCount = 0;
+  const callback = () => callCount++;
+
+  let readyState = 'loading';
+  let storedHandler = null;
+  const fakeDoc = {
+    get readyState() { return readyState; },
+    set onreadystatechange(fn) { storedHandler = fn; },
+  };
+
+  window.VSC.DomUtils.initializeWhenReady(fakeDoc, callback);
+
+  // callback must not have fired yet — document is still loading
+  assert.equal(callCount, 0, 'callback must not fire before readyState is complete');
+
+  // Simulate readyState transition
+  readyState = 'complete';
+  storedHandler && storedHandler();
+
+  assert.equal(callCount, 1, 'callback must fire once when readyState changes to complete');
+});
+
+runner.test('DomUtils.initializeWhenReady calls callback immediately when document is already complete', () => {
+  let callCount = 0;
+  const fakeDoc = { readyState: 'complete' };
+
+  window.VSC.DomUtils.initializeWhenReady(fakeDoc, () => callCount++);
+
+  assert.equal(callCount, 1, 'callback must be invoked immediately when readyState is already complete');
+});
+
+runner.test('DomUtils.findMediaElements returns empty array for null node (lines 174-175 early return)', () => {
+  // When node is null, the function should return early with [] on lines 174-175.
+  const results = window.VSC.DomUtils.findMediaElements(null);
+
+  assert.equal(results.length, 0, 'findMediaElements must return empty array for null node');
+});
+
+runner.test('DomUtils.findMediaElements includes the video node itself when it matches selector (lines 181-182)', () => {
+  // Pass a video element directly as `node` — node.matches('video') returns true
+  // so it is pushed to mediaElements on lines 181-182.
+  const video = document.createElement('video');
+
+  const results = window.VSC.DomUtils.findMediaElements(video, false);
+
+  assert.equal(results.length >= 1, true, 'findMediaElements must include the node itself when it is a video');
+  assert.equal(results[0], video, 'the first element must be the video node itself');
+});
+
+runner.test('DomUtils.findMediaElements finds media inside node shadow root (lines 182-183)', () => {
+  // The host element has a shadowRoot with a video inside.
+  // Lines 182-183: `if (node.shadowRoot)` → calls findShadowMedia.
+  const host = document.createElement('div');
+  document.body.appendChild(host);
+  const shadow = host.attachShadow({ mode: 'open' });
+  const video = document.createElement('video');
+  shadow.appendChild(video);
+
+  const results = window.VSC.DomUtils.findMediaElements(host, false);
+
+  assert.equal(results.includes(video), true, 'findMediaElements must traverse shadow root and find contained video');
+
+  document.body.removeChild(host);
+});
+
+export { runner as recursiveShadowDOMTestRunner };

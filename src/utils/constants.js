@@ -6,16 +6,18 @@
 // Initialize global namespace for content script
 
 window.VSC = window.VSC || {};
-window.VSC.Constants = {};
+window.VSC.Constants = window.VSC.Constants || {};
 
 // Skip loading if already loaded to prevent redeclaration errors
 if (!window.VSC.Constants.DEFAULT_SETTINGS) {
-  // Add debug info to DOM for inspection
-  const debugDiv = document.createElement('div');
-  debugDiv.id = 'vsc-constants-loaded';
-  debugDiv.style.display = 'none';
-  debugDiv.textContent = `Constants loaded at ${new Date().toISOString()}`;
-  document.head.appendChild(debugDiv);
+  // Add debug info to DOM for inspection (guard: document.head may be null in sub-frames)
+  if (document.head) {
+    const debugDiv = document.createElement('div');
+    debugDiv.id = 'vsc-constants-loaded';
+    debugDiv.style.display = 'none';
+    debugDiv.textContent = `Constants loaded at ${new Date().toISOString()}`;
+    document.head.appendChild(debugDiv);
+  }
 
   // Define constants directly first for ES6 exports
   const regStrip = /^[\r\t\f\v ]+|[\r\t\f\v ]+$/gm;
@@ -60,6 +62,8 @@ meet.google.com`.replace(regStrip, ''),
     controlGifs: true,
     lastGifSpeed: 1.0,
     gifSpeedStep: 0.1,
+    hoverActivatesVideoTarget: true, // enabled by default
+    hoverActivatesGifTarget: false, // disabled by default
   };
 
   window.VSC.Constants.DEFAULT_SETTINGS = DEFAULT_SETTINGS;
@@ -116,6 +120,9 @@ meet.google.com`.replace(regStrip, ''),
   window.VSC.Constants.GIF_FRAME_CACHE_LIMIT_BYTES = 50 * 1024 * 1024; // 50 MB soft per-GIF
   window.VSC.Constants.GIF_MIN_SIZE_PX = 20;
   window.VSC.Constants.GIF_SPEED_SAVE_DEBOUNCE_MS = 500;
+
+  // Hover-to-activate dwell time
+  window.VSC.Constants.HOVER_DWELL_MS = 200;
 } // End conditional loading check
 
 // Global variables available for both browser and testing

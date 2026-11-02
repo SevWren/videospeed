@@ -9,6 +9,7 @@ class ActionHandler {
   constructor(config, eventManager) {
     this.config = config;
     this.eventManager = eventManager;
+    this._hoverTargetController = null;
     this._gifSpeedSaveTimer = null;
     this._gifSpeedPendingSpeed = undefined;
     this._visibilityFlushHandler = () => {
@@ -21,6 +22,15 @@ class ActionHandler {
       }
     };
     document.addEventListener('visibilitychange', this._visibilityFlushHandler);
+  }
+
+  /**
+   * Set the hover-derived target controller.
+   * Called by VideoController and GifController on mouseenter (after dwell).
+   * @param {HTMLElement} controllerDiv - The shadow-host div of the hovered controller
+   */
+  setHoverTarget(controllerDiv) {
+    this._hoverTargetController = controllerDiv;
   }
 
   /**
@@ -44,16 +54,21 @@ class ActionHandler {
       }
     }
 
-    mediaTags.forEach((v, index) => {
+    mediaTags.forEach((v, _index) => {
       const controller = v.vsc?.div;
 
       if (!controller) {
         return;
       }
 
-      // Don't change video speed if the video has a different controller
-      // Only apply this check for button clicks (when targetController is set)
-      if (e && targetController && !(targetController === controller)) {
+      // Resolve the target: click-derived > hover-derived > broadcast.
+      // mark and jump are excluded from hover activation (stateful operations that
+      // must broadcast when only a hover target — not a click — is the source).
+      const isMarkOrJump = action === 'mark' || action === 'jump';
+      const hoverTarget = !isMarkOrJump ? this._hoverTargetController : null;
+      const resolvedTarget = targetController ?? hoverTarget ?? null;
+
+      if (resolvedTarget && !(resolvedTarget === controller)) {
         return;
       }
 
@@ -98,7 +113,14 @@ class ActionHandler {
       if (!gc.div) {
         return;
       }
-      if (e && targetController && targetController !== gc.div) {
+      // Resolve the target: click-derived > hover-derived > broadcast.
+      // mark and jump are already no-ops for GIFs (no timeline), but the guard
+      // documents intent and keeps parity with the video path.
+      const isMarkOrJump = action === 'mark' || action === 'jump';
+      const hoverTarget = !isMarkOrJump ? this._hoverTargetController : null;
+      const resolvedTarget = targetController ?? hoverTarget ?? null;
+
+      if (resolvedTarget && resolvedTarget !== gc.div) {
         return;
       }
       const showActions = ['faster', 'slower', 'reset', 'fast', 'pause', 'display'];

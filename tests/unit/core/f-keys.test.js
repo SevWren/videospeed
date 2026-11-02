@@ -91,31 +91,45 @@ runner.test('Special keys beyond standard range should be accepted', async () =>
   });
 });
 
-runner.test('Blacklisted keys should be properly handled in options UI', async () => {
-  // This test verifies that blacklisted keys are rejected in the options UI
-  // The actual runtime blocking of Tab happens through browser navigation handling
+// Catches regression: EventManager dispatching an action when a modifier key (Alt, Ctrl, Meta)
+// is held, causing a 'faster' binding on keyCode 65 to fire even during Ctrl+A (select-all).
+runner.test('Key event with Alt modifier held does not trigger bound action', async () => {
+  const config = new window.VSC.VideoSpeedConfig();
+  await config.load();
 
-  // Simulate the recordKeyPress function behavior with blacklisted keys
-  const BLACKLISTED_KEYCODES = [9, 16, 17, 18, 91, 92, 93, 224];
+  const actionHandler = new window.VSC.ActionHandler(config, null);
+  const eventManager = new window.VSC.EventManager(config, actionHandler);
+  actionHandler.eventManager = eventManager;
 
-  BLACKLISTED_KEYCODES.forEach(keyCode => {
-    const mockEvent = {
-      keyCode: keyCode,
-      preventDefault: () => { },
-      stopPropagation: () => { }
-    };
+  config.settings.keyBindings = [{
+    action: 'faster',
+    key: 65, // A key
+    value: 0.5,
+    force: false,
+    predefined: false,
+  }];
 
-    // In the real options.js, blacklisted keys would be prevented
-    const isBlacklisted = BLACKLISTED_KEYCODES.includes(keyCode);
-    assert.equal(isBlacklisted, true, `Key ${keyCode} should be blacklisted`);
+  const mockVideo = {
+    playbackRate: 1.0,
+    paused: false,
+    muted: false,
+    currentTime: 0,
+    duration: 100,
+    classList: { contains: () => false },
+    vsc: { div: document.createElement('div'), speedIndicator: { textContent: '1.00' } },
+  };
+  config.addMediaElement(mockVideo);
+
+  // Fire the key with Alt held — should be suppressed by EventManager's modifier check
+  eventManager.handleKeydown({
+    keyCode: 65,
+    target: { nodeName: 'DIV', isContentEditable: false, getRootNode: () => ({ host: null }) },
+    getModifierState: (mod) => mod === 'Alt',
+    preventDefault: () => {},
+    stopPropagation: () => {},
   });
 
-  // Verify that non-blacklisted keys would be accepted
-  const allowedKeys = [124, 65, 32, 13]; // F13, A, Space, Enter
-  allowedKeys.forEach(keyCode => {
-    const isBlacklisted = BLACKLISTED_KEYCODES.includes(keyCode);
-    assert.equal(isBlacklisted, false, `Key ${keyCode} should not be blacklisted`);
-  });
+  assert.equal(mockVideo.playbackRate, 1.0, 'Speed should not change when Alt is held');
 });
 
 runner.test('EventManager should handle F-keys correctly', async () => {
@@ -143,7 +157,7 @@ runner.test('EventManager should handle F-keys correctly', async () => {
     currentTime: 0,
     duration: 100,
     classList: {
-      contains: (className) => false  // Mock classList for 'vsc-cancelled' check
+      contains: (_className) => false  // Mock classList for 'vsc-cancelled' check
     },
     vsc: { div: document.createElement('div'), speedIndicator: { textContent: '1.00' } }
   };
@@ -170,19 +184,55 @@ runner.test('EventManager should handle F-keys correctly', async () => {
   assert.equal(mockVideo.playbackRate, 1.1, 'F13 key should increase speed by 0.1');
 });
 
-runner.test('Key display names should work for all supported keys', () => {
-  // Test that key display logic handles various key types
-  const keyCodeAliases = window.VSC?.Constants?.keyCodeAliases || {};
+// Catches regression: EventManager silently ignoring F13-F24 key events due to a key-range
+// filter capped at 123, so pressing F14-F24 does nothing even with a configured binding.
+runner.test('F13 through F24 keys each trigger their bound action when pressed', async () => {
+  const config = new window.VSC.VideoSpeedConfig();
+  await config.load();
 
-  // F13-F24 should have aliases
-  for (let i = 13; i <= 24; i++) {
-    const keyCode = 111 + i; // F13=124, etc.
-    const expectedAlias = `F${i}`;
+  const actionHandler = new window.VSC.ActionHandler(config, null);
+  const eventManager = new window.VSC.EventManager(config, actionHandler);
+  actionHandler.eventManager = eventManager;
 
-    // This test would fail with the old code but passes with our updates
-    const hasAlias = keyCodeAliases[keyCode] !== undefined || keyCode === 124 + (i - 13);
-    assert.equal(hasAlias, true, `F${i} key (${keyCode}) should be supported`);
+  // F13=124 through F24=135
+  for (let fNum = 13; fNum <= 24; fNum++) {
+    const keyCode = 111 + fNum; // F13=124, ..., F24=135
+
+    const mockVideo = {
+      playbackRate: 1.0,
+      paused: false,
+      muted: false,
+      currentTime: 0,
+      duration: 100,
+      classList: { contains: () => false },
+      vsc: { div: document.createElement('div'), speedIndicator: { textContent: '1.00' } },
+    };
+    config.settings.keyBindings = [{
+      action: 'faster',
+      key: keyCode,
+      value: 0.1,
+      force: false,
+      predefined: false,
+    }];
+    config.addMediaElement(mockVideo);
+
+    eventManager.handleKeydown({
+      keyCode,
+      target: { nodeName: 'DIV', isContentEditable: false, getRootNode: () => ({ host: null }) },
+      getModifierState: () => false,
+      preventDefault: () => {},
+      stopPropagation: () => {},
+    });
+
+    assert.equal(
+      Math.round(mockVideo.playbackRate * 10) / 10,
+      1.1,
+      `F${fNum} (keyCode ${keyCode}) should trigger 'faster' and raise speed to 1.1`
+    );
+
+    // Clear media elements for next iteration
+    config.getMediaElements().length = 0;
   }
 });
 
-export default runner; 
+export default runner;

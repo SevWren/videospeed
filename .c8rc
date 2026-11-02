@@ -1,0 +1,9 @@
+{
+  "all": true,
+  "include": ["src/**/*.js"],
+  "exclude": ["src/lib/**"],
+  "reporter": ["text", "json"],
+  "reportsDirectory": "coverage",
+  "src": ".",
+  "extension": [".js"]
+}

@@ -1,9 +1,9 @@
 {
-  "name": "Video Speed Controller-AI-Fix",
+  "name": "VideoSpeedVerificationBranch",
   "short_name": "videospeed",
   "version": "0.9.1",
   "manifest_version": 3,
-  "minimum_chrome_version": "89",
+  "minimum_chrome_version": "111",
   "description": "Speed up, slow down, advance and rewind HTML5 audio/video and animated GIFs with shortcuts",
   "homepage_url": "https://github.com/igrigorik/videospeed",
   "icons": {
@@ -42,7 +42,7 @@
         "https://*/*",
         "file:///*"
       ],
-      "match_about_blank": true,
+      "match_about_blank": false,
       "exclude_matches": [
         "https://hangouts.google.com/*",
         "https://meet.google.com/*"
@@ -53,6 +53,61 @@
       "js": [
         "src/content/injector.js"
       ]
+    },
+    {
+      "all_frames": true,
+      "matches": [
+        "http://*/*",
+        "https://*/*",
+        "file:///*"
+      ],
+      "match_about_blank": false,
+      "exclude_matches": [
+        "https://hangouts.google.com/*",
+        "https://meet.google.com/*"
+      ],
+      "world": "MAIN",
+      "run_at": "document_end",
+      "js": [
+        "src/utils/constants.js",
+        "src/utils/logger.js",
+        "src/utils/debug-helper.js",
+        "src/utils/dom-utils.js",
+        "src/utils/event-manager.js",
+        "src/core/storage-manager.js",
+        "src/core/settings.js",
+        "src/observers/media-observer.js",
+        "src/observers/mutation-observer.js",
+        "src/core/action-handler.js",
+        "src/core/video-controller.js",
+        "src/ui/controls.js",
+        "src/ui/drag-handler.js",
+        "src/ui/shadow-dom.js",
+        "src/site-handlers/base-handler.js",
+        "src/site-handlers/netflix-handler.js",
+        "src/site-handlers/youtube-handler.js",
+        "src/site-handlers/facebook-handler.js",
+        "src/site-handlers/amazon-handler.js",
+        "src/site-handlers/apple-handler.js",
+        "src/site-handlers/index.js",
+        "src/lib/gifuct-js.min.js",
+        "src/core/gif-frame-engine.js",
+        "src/observers/gif-observer.js",
+        "src/core/gif-controller.js",
+        "src/content/inject.js"
+      ]
+    },
+    {
+      "all_frames": true,
+      "matches": [
+        "https://www.netflix.com/*"
+      ],
+      "match_about_blank": false,
+      "world": "MAIN",
+      "run_at": "document_end",
+      "js": [
+        "src/site-handlers/scripts/netflix.js"
+      ]
     }
   ],
   "web_accessible_resources": [
@@ -60,7 +115,6 @@
       "resources": [
         "src/styles/inject.css",
         "src/styles/shadow.css",
-        "src/module-loader.js",
         "src/core/*.js",
         "src/utils/*.js",
         "src/ui/*.js",

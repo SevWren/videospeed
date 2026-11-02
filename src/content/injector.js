@@ -1,129 +1,20 @@
 /**
- * Content script that injects the main extension code into the page context
- * This solves the Manifest V3 isolated world issue
+ * Content script (isolated world) — bridges chrome.* APIs to the page world.
+ *
+ * WHY THIS APPROACH (Path B):
+ * All main-world modules (VSC core, UI, handlers, inject.js) are now declared
+ * directly in manifest.json under content_scripts with "world": "MAIN". Chrome
+ * injects them natively, bypassing the page's Content Security Policy entirely.
+ * No DOM <script> injection and no chrome.scripting.executeScript call is needed.
+ *
+ * This file runs in the ISOLATED world and provides the chrome.* API bridge:
+ * - injectUserSettings(): reads chrome.storage.sync, fires VSC_USER_SETTINGS event
+ * - setupMessageBridge(): relays popup messages, storage changes, controller events,
+ *   save-settings requests, and the file:// GIF byte-fetch proxy
+ *
+ * See: manifest.json content_scripts[1] (world:"MAIN", 26 modules + inject.js)
+ *      manifest.json content_scripts[2] (world:"MAIN", Netflix-specific script)
  */
-
-// Function to inject script into page context
-function injectScript(src) {
-  return new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = chrome.runtime.getURL(src);
-    script.onload = () => {
-      resolve();
-    };
-    script.onerror = () => {
-      console.error(`❌ Failed to inject: ${src}`);
-      reject(new Error(`Failed to inject ${src}`));
-    };
-    (document.head || document.documentElement).appendChild(script);
-  });
-}
-
-// Inject CSS first
-function injectCSS() {
-  const link = document.createElement('link');
-  link.rel = 'stylesheet';
-  link.type = 'text/css';
-  link.href = chrome.runtime.getURL('src/styles/inject.css');
-  document.head.appendChild(link);
-}
-
-// Inject all our modules in order
-async function injectModules() {
-  try {
-    // Inject CSS first
-    injectCSS();
-
-    const modules = [
-      'src/utils/constants.js',
-      'src/utils/logger.js',
-      'src/utils/debug-helper.js',
-      'src/utils/dom-utils.js',
-      'src/utils/event-manager.js',
-      'src/core/storage-manager.js',
-      'src/core/settings.js',
-      'src/observers/media-observer.js',
-      'src/observers/mutation-observer.js',
-      'src/core/action-handler.js',
-      'src/core/video-controller.js',
-      'src/ui/controls.js',
-      'src/ui/drag-handler.js',
-      'src/ui/shadow-dom.js',
-      'src/site-handlers/base-handler.js',
-      'src/site-handlers/netflix-handler.js',
-      'src/site-handlers/youtube-handler.js',
-      'src/site-handlers/facebook-handler.js',
-      'src/site-handlers/amazon-handler.js',
-      'src/site-handlers/apple-handler.js',
-      'src/site-handlers/index.js',
-      'src/lib/gifuct-js.min.js',
-      'src/core/gif-frame-engine.js',
-      'src/observers/gif-observer.js',
-      'src/core/gif-controller.js',
-    ];
-
-    // Inject modules with yielding to avoid blocking page load
-    for (let i = 0; i < modules.length; i++) {
-      const module = modules[i];
-      await injectScript(module);
-
-      // Yield control to browser every few modules to avoid blocking
-      if (i > 0 && i % 5 === 0) {
-        await new Promise((resolve) => {
-          if (window.requestIdleCallback) {
-            requestIdleCallback(resolve, { timeout: 50 });
-          } else {
-            setTimeout(resolve, 5);
-          }
-        });
-      }
-    }
-
-    // Inject site-specific scripts if needed
-    await injectSiteSpecificScripts();
-
-    await injectScript('src/content/inject.js');
-    await injectUserSettings();
-
-    // Set up message bridge between popup and injected scripts
-    setupMessageBridge();
-  } catch (error) {
-    console.error('💥 Module injection failed:', error);
-  }
-}
-
-// Inject site-specific scripts based on current domain
-async function injectSiteSpecificScripts() {
-  try {
-    // Check current domain and inject appropriate scripts
-    const hostname = location.hostname;
-    if (hostname === 'www.netflix.com') {
-      console.log('🎬 Netflix detected, injecting Netflix script...');
-      await injectScript('src/site-handlers/scripts/netflix.js');
-    }
-
-    // Add other site-specific scripts here as needed
-    // if (hostname === 'www.youtube.com') {
-    //   await injectScript('src/site-handlers/scripts/youtube.js');
-    // }
-  } catch (error) {
-    console.error('❌ Failed to inject site-specific scripts:', error);
-  }
-}
-
-const USER_CONTROLLED_KEYS = new Set([
-  'keyBindings',
-  'rememberSpeed',
-  'forceLastSavedSpeed',
-  'audioBoolean',
-  'startHidden',
-  'controllerOpacity',
-  'controllerButtonSize',
-  'logLevel',
-  'blacklist',
-  'enabled',
-]);
-
 // Set up message bridge between extension popup and injected page
 function setupMessageBridge() {
   const isExtensionContextInvalidated = (error) => {
@@ -151,35 +42,6 @@ function setupMessageBridge() {
       return true;
     }
   });
-
-  // Relay Options-page storage changes to the injected page world
-  try {
-    chrome.storage.onChanged.addListener((changes, area) => {
-      try {
-        if (area !== 'sync') {
-          return;
-        }
-        const patch = {};
-        for (const [key, { newValue }] of Object.entries(changes)) {
-          if (USER_CONTROLLED_KEYS.has(key)) {
-            patch[key] = newValue;
-          }
-        }
-        if (Object.keys(patch).length === 0) {
-          return;
-        }
-        window.dispatchEvent(new CustomEvent('VSC_USER_SETTINGS', { detail: patch }));
-      } catch (innerError) {
-        if (!isExtensionContextInvalidated(innerError)) {
-          console.error('❌ Error in storage.onChanged relay:', innerError);
-        }
-      }
-    });
-  } catch (error) {
-    if (!isExtensionContextInvalidated(error)) {
-      console.error('❌ Failed to register storage.onChanged listener:', error);
-    }
-  }
 
   // Listen for save settings requests from injected page context
   window.addEventListener('VSC_SAVE_SETTINGS', async (event) => {
@@ -346,6 +208,8 @@ function setupMessageBridge() {
     'blacklist',
     'enabled',
     'gifSpeedStep',
+    'hoverActivatesVideoTarget',
+    'hoverActivatesGifTarget',
   ]);
 
   chrome.storage.onChanged.addListener((changes, areaName) => {
@@ -381,6 +245,11 @@ async function injectUserSettings() {
       });
     });
 
+    // Write settings to window property BEFORE dispatching the event so that
+    // storage-manager.js can recover them even if the VSC_USER_SETTINGS event
+    // fires before its listener is registered (race condition fix — Option A).
+    window.__VSC_injectedSettings = userSettings;
+
     // Inject settings into page context via custom event
     window.dispatchEvent(
       new CustomEvent('VSC_USER_SETTINGS', {
@@ -392,30 +261,31 @@ async function injectUserSettings() {
   }
 }
 
-// Start injection when DOM is ready
+// Set up the chrome.* API bridge when DOM is ready.
+// Main-world modules (all 26 + inject.js) are loaded by Chrome natively via
+// the "world":"MAIN" content_scripts declaration in manifest.json — this file
+// only needs to bridge chrome.storage, chrome.runtime messaging, and the
+// file:// GIF byte-fetch proxy.
+async function initBridge() {
+  await injectUserSettings();
+  setupMessageBridge();
+}
+
+// ADR-0005 fix: call initBridge() without requestIdleCallback deferral.
+//
+// requestIdleCallback with a timeout fires its callback synchronously only when
+// the timeout expires — but if a long-running task (e.g. YouTube's 4000+ ms
+// setTimeout handlers) owns the thread at that moment, the idle callback is
+// queued behind it. StorageManager.waitForInjectedSettings() starts its 5000ms
+// deadline the instant inject.js runs; if injectUserSettings() arrives after
+// that deadline the user's settings are silently discarded (regression observed
+// in www.youtube.com-1793580955578.log line 23551).
+//
+// Direct call guarantees injectUserSettings() fires within milliseconds of
+// document_end on every load, well inside the 5000ms window.
 if (document.readyState === 'loading') {
-  // Wait for DOMContentLoaded, then defer injection to avoid blocking page load
-  document.addEventListener('DOMContentLoaded', () => {
-    // Use requestIdleCallback to wait for browser to be less busy
-    if (window.requestIdleCallback) {
-      requestIdleCallback(injectModules, { timeout: 3000 });
-    } else {
-      // Fallback with short delay to let page finish initial rendering
-      setTimeout(injectModules, 100);
-    }
-  });
-} else if (document.readyState === 'interactive') {
-  // Document is still loading, wait a bit more
-  if (window.requestIdleCallback) {
-    requestIdleCallback(injectModules, { timeout: 2000 });
-  } else {
-    setTimeout(injectModules, 50);
-  }
+  document.addEventListener('DOMContentLoaded', initBridge);
 } else {
-  // Document is complete, but still defer to avoid interfering with other scripts
-  if (window.requestIdleCallback) {
-    requestIdleCallback(injectModules, { timeout: 1000 });
-  } else {
-    setTimeout(injectModules, 10);
-  }
+  // document is 'interactive' or 'complete' — call immediately
+  initBridge();
 }

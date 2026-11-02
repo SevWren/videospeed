@@ -21,9 +21,11 @@ runner.beforeEach(() => {
   installChromeMock();
   resetMockStorage();
 
-  // Clear any injected settings for clean tests
+  // Reset StorageManager listener and injected-settings state so no stale
+  // values carry over from earlier test files in the shared JSDOM environment.
+  // _teardownSettingsListener() resets both _listenerSetup and _injectedSettings.
   if (window.VSC && window.VSC.StorageManager) {
-    window.VSC.StorageManager._injectedSettings = null;
+    window.VSC.StorageManager._teardownSettingsListener();
   }
 });
 
@@ -70,10 +72,12 @@ runner.test('Fresh install should not require first-time initialization', async 
   assert.exists(config.settings.keyBindings, 'Should have keyBindings on fresh install');
   assert.equal(config.settings.keyBindings.length > 0, true, 'Should have default keyBindings on fresh install');
   
-  // Verify it matches DEFAULT_SETTINGS
-  const defaultsLength = window.VSC.Constants.DEFAULT_SETTINGS.keyBindings.length;
-  assert.equal(config.settings.keyBindings.length, defaultsLength, 
-    `Expected ${defaultsLength} bindings, got ${config.settings.keyBindings.length}`);
+  // Verify count matches the known-good literal (11) from constants.js at authoring time:
+  //   slower(Z), faster(C), fast(X), rewind(E), rewind(W), advance(R), advance(T),
+  //   reset(S), display(V), mark(M), jump(J)
+  // Red signal: if DEFAULT_SETTINGS.keyBindings is accidentally emptied, this fails.
+  assert.equal(config.settings.keyBindings.length, 11,
+    `Expected 11 default bindings on fresh install, got ${config.settings.keyBindings.length}`);
 });
 
 // Storage System Unification tests
@@ -190,14 +194,29 @@ runner.test('Fresh install should always have functional default shortcuts', asy
   const config = new window.VSC.VideoSpeedConfig();
   await config.load();
 
-  // Should have all expected default shortcuts
-  const requiredActions = ['slower', 'faster', 'rewind', 'advance', 'reset', 'fast', 'display', 'mark', 'jump'];
-  
-  for (const action of requiredActions) {
+  // Known-good keycodes from constants.js (independent literals — NOT re-read from
+  // DEFAULT_SETTINGS at test time).  "First binding" per action wins; for actions
+  // with two bindings (rewind, advance) we assert the first (lower keycode) entry.
+  // Red signal: if any binding is missing or its keycode changes, this test fails.
+  //   slower=Z(90), faster=C(67), fast=X(88), rewind=E(69), advance=R(82),
+  //   reset=S(83), display=V(86), mark=M(77), jump=J(74)
+  const expectedFirstKey = {
+    slower:  90, // Z
+    faster:  67, // C
+    fast:    88, // X
+    rewind:  69, // E  (first rewind binding)
+    advance: 82, // R  (first advance binding)
+    reset:   83, // S
+    display: 86, // V
+    mark:    77, // M
+    jump:    74, // J
+  };
+
+  for (const [action, expectedKey] of Object.entries(expectedFirstKey)) {
     const binding = config.settings.keyBindings.find(b => b.action === action);
     assert.exists(binding, `Missing default binding for ${action} on fresh install`);
-    assert.equal(typeof binding.key, 'number', `Key for ${action} should be number`);
-    assert.equal(binding.key > 0, true, `Invalid key for ${action}: ${binding.key}`);
+    assert.equal(binding.key, expectedKey,
+      `Default key for '${action}' should be ${expectedKey} (got ${binding.key})`);
   }
 });
 

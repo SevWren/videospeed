@@ -8,24 +8,51 @@ await loadGifModules();
 
 const runner = new SimpleTestRunner();
 
-runner.test('ActionHandler has runGifAction method', () => {
+// Catches regression: runGifAction not iterating GIF elements or not calling setSpeed on the controller
+runner.test('runGifAction calls setSpeed on gif controller when controlGifs is true', () => {
+  let setSpeedCalled = false;
+  let setSpeedValue = null;
+  const fakeGc = {
+    setSpeed: (s) => { setSpeedCalled = true; setSpeedValue = s; },
+    _speed: 1.0,
+    div: document.createElement('div'),
+    fetchFailed: false,
+  };
+  const fakeImg = { gifController: fakeGc, vscGifIgnore: false };
   const ah = new window.VSC.ActionHandler(
-    { settings: { controlGifs: true, gifSpeedStep: 0.1 }, getGifElements: () => [], getMediaElements: () => [], save: () => {} },
+    {
+      settings: { controlGifs: true, gifSpeedStep: 0.1, lastGifSpeed: 1.0 },
+      getGifElements: () => [fakeImg],
+      getMediaElements: () => [],
+      save: () => {},
+    },
     { showController: () => {} }
   );
-  if (typeof ah.runGifAction !== 'function') {
-    throw new Error('runGifAction is not a function');
-  }
+  ah.runGifAction('faster', 0.5, null);
+  if (!setSpeedCalled) { throw new Error('setSpeed was not called on the gif controller'); }
+  if (setSpeedValue !== 1.5) { throw new Error(`Expected setSpeed(1.5) but got setSpeed(${setSpeedValue})`); }
 });
 
-runner.test('ActionHandler has executeGifAction method', () => {
+// Catches regression: executeGifAction not applying the slower delta to the gif controller speed
+runner.test('executeGifAction slower reduces gif controller speed by the given value', () => {
+  let capturedSpeed = null;
+  const fakeGc = {
+    setSpeed: (s) => { capturedSpeed = s; },
+    _speed: 2.0,
+    fetchFailed: false,
+  };
+  const fakeImg = { gifController: fakeGc };
   const ah = new window.VSC.ActionHandler(
-    { settings: { controlGifs: true, gifSpeedStep: 0.1 }, getGifElements: () => [], getMediaElements: () => [], save: () => {} },
+    {
+      settings: { controlGifs: true, gifSpeedStep: 0.1, lastGifSpeed: 2.0 },
+      getGifElements: () => [],
+      getMediaElements: () => [],
+      save: () => {},
+    },
     { showController: () => {} }
   );
-  if (typeof ah.executeGifAction !== 'function') {
-    throw new Error('executeGifAction is not a function');
-  }
+  ah.executeGifAction('slower', 0.5, fakeImg, null);
+  if (capturedSpeed !== 1.5) { throw new Error(`Expected setSpeed(1.5) but got setSpeed(${capturedSpeed})`); }
 });
 
 runner.test('runGifAction returns early when controlGifs is false', () => {
@@ -38,13 +65,31 @@ runner.test('runGifAction returns early when controlGifs is false', () => {
   if (called) { throw new Error('getGifElements should not be called when controlGifs is false'); }
 });
 
-runner.test('ActionHandler has _saveGifSpeedDebounced method', () => {
+// Catches regression: gif speed not being flushed to settings.lastGifSpeed when cleanup is called
+// (e.g., tab hidden before debounce fires, leaving stale lastGifSpeed in storage)
+runner.test('gif speed is persisted to lastGifSpeed when cleanup flushes pending debounce', () => {
+  const settings = { controlGifs: true, gifSpeedStep: 0.1, lastGifSpeed: 1.0 };
+  const fakeGc = {
+    setSpeed: () => {},
+    _speed: 1.0,
+    fetchFailed: false,
+  };
+  const fakeImg = { gifController: fakeGc };
   const ah = new window.VSC.ActionHandler(
-    { settings: { controlGifs: true, gifSpeedStep: 0.1 }, getGifElements: () => [], getMediaElements: () => [], save: () => {} },
+    {
+      settings,
+      getGifElements: () => [],
+      getMediaElements: () => [],
+      save: () => {},
+    },
     { showController: () => {} }
   );
-  if (typeof ah._saveGifSpeedDebounced !== 'function') {
-    throw new Error('_saveGifSpeedDebounced is not a function');
+  // Directly call executeGifAction to queue a debounced save at speed 1.0 (reset)
+  ah.executeGifAction('reset', null, fakeImg, null);
+  // Flush via cleanup (simulates tab becoming hidden before the debounce timer fires)
+  ah.cleanup();
+  if (settings.lastGifSpeed !== 1.0) {
+    throw new Error(`Expected lastGifSpeed 1.0 after cleanup but got ${settings.lastGifSpeed}`);
   }
 });
 

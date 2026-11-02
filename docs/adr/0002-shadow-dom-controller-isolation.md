@@ -4,14 +4,16 @@
 
 Host pages apply aggressive CSS resets, z-index stacking, and font overrides that break injected UI. Mounting the controller as a Shadow DOM host (`element.attachShadow({ mode: 'open' })`) with its own stylesheet (`shadow.css`) prevents host styles from leaking in and prevents controller styles from leaking out. An iframe would give stronger isolation but would require cross-frame messaging for every user interaction and cannot be positioned relative to a `<video>` element reliably across sites.
 
-## Why GIF controllers use canvas replacement instead of Shadow DOM
+## Why the GIF canvas element does not use Shadow DOM
 
-GIF playback is handled by replacing the original `<img>` element in-place with a `<canvas>` element that occupies the exact same DOM position. This approach is incompatible with and does not benefit from Shadow DOM for several reasons:
+GIF playback is handled by replacing the original `<img>` element in-place with a `<canvas>` element that occupies the exact same DOM position. The canvas element itself does not use Shadow DOM, for several reasons:
 
 - A `<canvas>` element renders pixels directly from decoded frame data. It has no child DOM or injected stylesheet, so style isolation is irrelevant — there is nothing for host-page styles to bleed into.
 - Attaching a shadow root to a canvas element would add architectural complexity with no practical benefit.
 - GIF frame timing is driven by a `requestAnimationFrame` loop managed by `GifFrameEngine`. This rAF-based control model has no equivalent in a Shadow DOM setup, which is purely a style-isolation mechanism.
 - Memory tradeoff: canvas replacement pre-decodes all GIF frames into memory upfront, managed by `GifFrameCache` (200 MB global budget, 50 MB per-GIF limit). A Shadow DOM host node, by contrast, carries no pre-computed frame data and has negligible memory overhead.
+
+**Important clarification:** The GIF speed controls overlay div IS a Shadow DOM host. `GifController._initializeControls()` creates a `<div class="vsc-controller">` adjacent to the canvas and calls `ShadowDOMManager.createShadowDOM(div, { isGif: true })` on it — the same Shadow DOM setup used by `VideoController`. The GIF speed controls therefore benefit from the same style isolation as video controllers. The distinction is: the canvas element (the GIF rendering surface) avoids Shadow DOM, while the floating speed controls overlay (the user interaction surface) uses it.
 
 ## GIF detection path vs. video/audio detection
 

@@ -444,6 +444,10 @@ class VideoSpeedExtension {
    * @param {Document} document - Document to set up CSS for
    */
   setupDocumentCSS(document) {
+    if (!document.head) {
+      this.logger.debug('setupDocumentCSS: skipped — document.head is null');
+      return;
+    }
     const link = document.createElement('link');
     link.href =
       typeof chrome !== 'undefined' && chrome.runtime
@@ -656,26 +660,70 @@ window.addEventListener('beforeunload', () => {
   extension.cleanup();
 });
 
+/**
+ * Determine whether VSC should initialize in the current browsing context.
+ *
+ * Rules (mirrors the removed shouldInjectInCurrentFrame() from commit 8741c48):
+ *   - Top-level documents: always initialize.
+ *   - Sub-frames where inIframe() is true:
+ *     - Non-HTTP(S)/file frame URLs: skip.
+ *     - Same-origin parent (void window.parent.document succeeds): skip.
+ *     - Cross-origin parent (void window.parent.document throws SecurityError): inject.
+ *
+ * @returns {boolean}
+ */
+function shouldInjectInCurrentFrame() {
+  // Top-level document: always inject
+  if (!window.VSC.DomUtils.inIframe()) {
+    return true;
+  }
+
+  // Sub-frame: skip non-HTTP(S)/file frames
+  try {
+    const href = window.location.href;
+    if (
+      !href.startsWith('http://') &&
+      !href.startsWith('https://') &&
+      !href.startsWith('file://')
+    ) {
+      return false;
+    }
+  } catch (e) {
+    return false; // Cannot read location (sandboxed) — skip
+  }
+
+  // Same-origin parent: void window.parent.document succeeds (no SecurityError) — skip.
+  // Cross-origin parent: throws SecurityError — inject (independent embedded player).
+  try {
+    void window.parent.document;
+    return false; // same-origin parent — top-level frame handles it
+  } catch (e) {
+    if (e.name === 'SecurityError') {
+      return true; // cross-origin embedded player
+    }
+    return false; // unexpected error — skip injection
+  }
+}
+
+// Expose for testability
+window.VSC._shouldInjectInCurrentFrame = shouldInjectInCurrentFrame;
+
 // Auto-initialize - settings loading will wait for injected settings if needed
-extension.initialize().catch((error) => {
-  console.error(`Extension initialization failed: ${error.message}`);
-  window.VSC?.logger?.error(`Extension initialization failed: ${error.message}`);
-});
+if (shouldInjectInCurrentFrame()) {
+  extension.initialize().catch((error) => {
+    console.error(`Extension initialization failed: ${error.message}`);
+    window.VSC?.logger?.error(`Extension initialization failed: ${error.message}`);
+  });
+}
 
 // Export for testing
 window.VideoSpeedExtension = VideoSpeedExtension;
 window.videoSpeedExtension = extension;
 
-// Relay live settings changes from the Options page into the running extension
-window.addEventListener('VSC_USER_SETTINGS', (event) => {
-  if (!extension?.initialized) {
-    return;
-  }
-  extension.config.applySettings(event.detail);
-});
-
-// Add test indicator for E2E tests
-const testIndicator = document.createElement('div');
-testIndicator.id = 'vsc-test-indicator';
-testIndicator.style.display = 'none';
-document.head.appendChild(testIndicator);
+// Add test indicator for E2E tests (guard: document.head may be null in sub-frames)
+if (document.head) {
+  const testIndicator = document.createElement('div');
+  testIndicator.id = 'vsc-test-indicator';
+  testIndicator.style.display = 'none';
+  document.head.appendChild(testIndicator);
+}

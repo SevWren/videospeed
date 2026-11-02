@@ -1,7 +1,7 @@
 /**
  * Integration tests for GIF speed control feature
  */
-import { SimpleTestRunner } from '../helpers/test-utils.js';
+import { SimpleTestRunner, assert } from '../helpers/test-utils.js';
 import { loadGifModules } from '../helpers/module-loader.js';
 
 await loadGifModules();
@@ -63,16 +63,23 @@ runner.test('VideoMutationObserver accepts 4 arguments (backward compat)', () =>
   }
 });
 
-runner.test('GifFrameCache is available', () => {
-  if (!window.VSC.GifFrameCache) {
-    throw new Error('GifFrameCache not found');
-  }
+runner.test('GifFrameCache rejects an allocation that would exceed the global memory budget', () => {
+  const cache = window.VSC.GifFrameCache;
+  const budget = window.VSC.Constants.GIF_GLOBAL_MEMORY_BUDGET_BYTES;
+  const saved = cache._allocated;
+  cache._allocated = budget; // already at limit
+  const overBudgetResult = cache.tryAllocate(1);
+  cache._allocated = saved;
+  assert.false(overBudgetResult, 'tryAllocate should return false when allocation would exceed budget');
 });
 
-runner.test('GifObserver is available', () => {
-  if (!window.VSC.GifObserver) {
-    throw new Error('GifObserver not found');
-  }
+runner.test('GifObserver identifies an img element with a .gif src as a GIF element', () => {
+  const img = document.createElement('img');
+  img.src = 'https://example.com/animation.gif';
+  assert.true(
+    window.VSC.GifObserver.isGifElement(img),
+    'An img with a .gif URL should be detected as a GIF element'
+  );
 });
 
 runner.test('GifFrameCache is idempotent for addGifElement (no duplicate entries)', () => {
@@ -89,26 +96,14 @@ runner.test('GifFrameCache is idempotent for addGifElement (no duplicate entries
   }
 });
 
-runner.test('GifFrameCache memory budget check prevents over-allocation', () => {
+runner.test('GifFrameCache allows allocation when remaining budget is exactly met', () => {
   const cache = window.VSC.GifFrameCache;
-  const saved = cache._allocated;
   const budget = window.VSC.Constants.GIF_GLOBAL_MEMORY_BUDGET_BYTES;
-  cache._allocated = budget - 100;
-  const canAllocSmall = cache.requestAllocation
-    ? cache.requestAllocation(100)
-    : cache.tryAllocate
-      ? (() => {
-          const r = cache.tryAllocate(100);
-          if (r) {
-            cache._allocated -= 100;
-          }
-          return r;
-        })()
-      : true;
+  const saved = cache._allocated;
+  cache._allocated = budget - 100; // 100 bytes remain
+  const result = cache.tryAllocate(100);
   cache._allocated = saved;
-  if (canAllocSmall !== true) {
-    throw new Error('Expected small allocation within budget to succeed');
-  }
+  assert.true(result, 'tryAllocate should return true when bytes requested exactly fit remaining budget');
 });
 
 export default runner;

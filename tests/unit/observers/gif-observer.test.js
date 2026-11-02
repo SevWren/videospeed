@@ -98,4 +98,73 @@ runner.test('detectGifsInDOM: img with naturalWidth=25 and naturalHeight=25 pass
   if (!results.includes(img)) throw new Error('Expected img with 25x25 to pass size check');
 });
 
+// --- Lines 31-36: isGifElement currentSrc branch and explicit false return ---
+
+runner.test('isGifElement: returns true when src is not gif but currentSrc is gif URL', () => {
+  // Exercises the currentSrc branch (lines 30-32) — src is non-gif, currentSrc is .gif
+  const img = document.createElement('img');
+  Object.defineProperty(img, 'src', { value: 'https://example.com/image.png', configurable: true });
+  Object.defineProperty(img, 'currentSrc', {
+    value: 'https://example.com/anim.gif',
+    configurable: true,
+  });
+  const result = window.VSC.GifObserver.isGifElement(img);
+  if (result !== true) {
+    throw new Error(`Expected true when currentSrc is gif, got ${result}`);
+  }
+});
+
+runner.test('isGifElement: returns false when src and currentSrc are both non-gif (exercises line 36 return false)', () => {
+  // Exercises the final return false path (line 36): neither src nor currentSrc is a gif
+  const img = document.createElement('img');
+  Object.defineProperty(img, 'src', { value: 'https://example.com/photo.png', configurable: true });
+  Object.defineProperty(img, 'currentSrc', {
+    value: 'https://example.com/photo.png',
+    configurable: true,
+  });
+  const result = window.VSC.GifObserver.isGifElement(img);
+  if (result !== false) {
+    throw new Error(`Expected false when neither src nor currentSrc is gif, got ${result}`);
+  }
+});
+
+// --- Lines 42-43: detectGifsInDOM — gifController/vscGifIgnore early exit ---
+
+runner.test('detectGifsInDOM: img with gifController is excluded (line 42 early-exit)', () => {
+  const img = document.createElement('img');
+  img.src = 'https://example.com/anim.gif';
+  img.gifController = {}; // truthy — triggers the early-exit on line 42
+  document.body.appendChild(img);
+  const results = window.VSC.GifObserver.detectGifsInDOM(document);
+  document.body.removeChild(img);
+  if (results.includes(img)) {
+    throw new Error('Expected img with gifController to be excluded from detectGifsInDOM results');
+  }
+});
+
+runner.test('detectGifsInDOM: img with vscGifIgnore is excluded (line 42-43 branch)', () => {
+  const img = document.createElement('img');
+  img.src = 'https://example.com/anim.gif';
+  img.vscGifIgnore = true; // truthy — triggers the early-exit on line 42-43
+  document.body.appendChild(img);
+  const results = window.VSC.GifObserver.detectGifsInDOM(document);
+  document.body.removeChild(img);
+  if (results.includes(img)) {
+    throw new Error('Expected img with vscGifIgnore to be excluded from detectGifsInDOM results');
+  }
+});
+
+// --- Lines 45-46: detectGifsInDOM — !isGifElement early exit ---
+
+runner.test('detectGifsInDOM: non-gif img is excluded via !isGifElement check (lines 45-46)', () => {
+  const img = document.createElement('img');
+  img.src = 'https://example.com/photo.png'; // not a gif
+  document.body.appendChild(img);
+  const results = window.VSC.GifObserver.detectGifsInDOM(document);
+  document.body.removeChild(img);
+  if (results.includes(img)) {
+    throw new Error('Expected non-gif img to be excluded from detectGifsInDOM results');
+  }
+});
+
 export default runner;

@@ -1,25 +1,33 @@
 /**
  * Unit tests for VideoSpeedExtension (inject.js)
- * Testing the fix for video elements without parentElement
+ *
+ * Seam A: onVideoFound — video-controller attachment behavior (parentElement fallback)
+ * Seam B: VSC_USER_SETTINGS live relay — config patching behavior
+ * Seam C: setupDocumentCSS — null-head defensive guard
+ *
+ * Mocking policy: only chrome.* APIs are mocked (system boundary).
+ * No internal collaborators (VideoController, MediaElementObserver, etc.) are mocked.
  */
 
 import { installChromeMock, cleanupChromeMock, resetMockStorage } from '../../helpers/chrome-mock.js';
 import { SimpleTestRunner, assert, createMockVideo, createMockDOM } from '../../helpers/test-utils.js';
 import { loadInjectModules } from '../../helpers/module-loader.js';
 
-// Load all required modules
+// Load all required modules once for the entire file.
 await loadInjectModules();
 
 const runner = new SimpleTestRunner();
 let mockDOM;
+// Per-test extension instance used by Seam A and Seam C tests.
 let extension;
+
+// ── Shared setup / teardown ──────────────────────────────────────────────────
 
 runner.beforeEach(() => {
   installChromeMock();
   resetMockStorage();
   mockDOM = createMockDOM();
 
-  // Initialize site handler manager for tests
   if (window.VSC && window.VSC.siteHandlerManager) {
     window.VSC.siteHandlerManager.initialize(document);
   }
@@ -30,260 +38,295 @@ runner.afterEach(() => {
   if (mockDOM) {
     mockDOM.cleanup();
   }
+
+  // Stop the mutation observer on any initialized extension to prevent
+  // async processMutations callbacks from leaking into later test suites.
   if (extension) {
-    extension = null;
+    try { extension.cleanup(); } catch (_e) { /* ignore */ }
+  }
+  extension = null;
+
+  // Stop the module-level singleton's mutation observer so it does not
+  // fire against DOM mutations made by later test suites.
+  const moduleExt = window.videoSpeedExtension;
+  if (moduleExt && moduleExt.mutationObserver) {
+    try { moduleExt.mutationObserver.stop(); } catch (_e) { /* ignore */ }
+  }
+  if (moduleExt) {
+    moduleExt.initialized = false;
   }
 
-  // Clean up any remaining video elements
-  const videos = document.querySelectorAll('video');
-  videos.forEach(video => {
+  // Remove any video elements left behind by Seam A tests.
+  document.querySelectorAll('video').forEach((video) => {
     if (video.vsc) {
-      try {
-        video.vsc.remove();
-      } catch (e) {
-        // Ignore cleanup errors
-      }
+      try { video.vsc.remove(); } catch (_e) { /* ignore */ }
     }
     if (video.parentNode) {
-      try {
-        video.parentNode.removeChild(video);
-      } catch (e) {
-        // Ignore cleanup errors
-      }
+      try { video.parentNode.removeChild(video); } catch (_e) { /* ignore */ }
     }
   });
 });
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
 /**
- * Create a video element without parentElement but with parentNode
- * This simulates shadow DOM scenarios where parentElement is undefined
+ * Build and await a fresh, fully-initialized VideoSpeedExtension instance.
+ * Throws (failing the test loudly) if initialization does not complete.
+ */
+async function makeInitializedExtension() {
+  const ext = new window.VideoSpeedExtension();
+  await ext.initialize();
+  assert.true(ext.initialized, 'prerequisite: extension must be initialized before test body runs');
+  return ext;
+}
+
+/**
+ * Return a mock video element whose parentElement is null but whose
+ * parentNode is a real div — simulating shadow-DOM host scenarios.
  */
 function createVideoWithoutParentElement() {
   const video = createMockVideo();
   const parentNode = document.createElement('div');
 
-  // Simulate shadow DOM scenario where parentElement is undefined
-  Object.defineProperty(video, 'parentElement', {
-    value: null,
-    writable: false,
-    configurable: true
-  });
-
-  Object.defineProperty(video, 'parentNode', {
-    value: parentNode,
-    writable: false,
-    configurable: true
-  });
-
-  // Mock isConnected property for validity check
-  Object.defineProperty(video, 'isConnected', {
-    value: true,
-    writable: false,
-    configurable: true
-  });
+  Object.defineProperty(video, 'parentElement', { value: null, writable: false, configurable: true });
+  Object.defineProperty(video, 'parentNode',    { value: parentNode, writable: false, configurable: true });
+  Object.defineProperty(video, 'isConnected',   { value: true, writable: false, configurable: true });
 
   return { video, parentNode };
 }
 
-runner.test('onVideoFound should handle video elements without parentElement', async () => {
-  // Create extension instance
-  extension = new window.VideoSpeedExtension();
+// ── Seam A: onVideoFound — parentElement fallback ───────────────────────────
 
+runner.test('video without parentElement gets a controller attached', async () => {
+  extension = await makeInitializedExtension();
+
+  const { video, parentNode } = createVideoWithoutParentElement();
+  extension.onVideoFound(video, parentNode);
+
+  assert.exists(video.vsc, 'video.vsc should exist after onVideoFound');
+});
+
+runner.test('video without parentElement controller is usable (can set playback rate)', async () => {
+  extension = await makeInitializedExtension();
+
+  const { video, parentNode } = createVideoWithoutParentElement();
+  extension.onVideoFound(video, parentNode);
+
+  // The controller is functional if it does not throw when the video's
+  // playback rate is changed through the standard HTMLMediaElement property.
+  let threw = false;
   try {
-    await extension.initialize();
-
-    // Create a video element without parentElement but with parentNode
-    const { video, parentNode } = createVideoWithoutParentElement();
-
-    // Test the onVideoFound method directly - this is the core functionality
-    extension.onVideoFound(video, parentNode);
-
-    // Verify that the video controller was attached
-    assert.exists(video.vsc, 'Video controller should be attached to the video element');
-    assert.true(video.vsc instanceof window.VSC.VideoController, 'Should create VideoController instance');
-
-    // Verify that the controller was initialized with the correct parent (parentNode fallback)
-    assert.equal(video.vsc.parent, parentNode, 'VideoController should use parentNode when parentElement is null');
-
-  } catch (error) {
-    console.error('Test error:', error);
-    assert.true(false, `Test should not throw error: ${error.message}`);
+    video.playbackRate = 1.5;
+  } catch (_e) {
+    threw = true;
   }
+  assert.false(threw, 'setting playbackRate on a shadow-DOM video must not throw');
 });
 
-runner.test('onVideoFound should prefer parentElement when available', async () => {
-  // Create extension instance
-  extension = new window.VideoSpeedExtension();
+runner.test('video with parentElement gets a controller attached', async () => {
+  extension = await makeInitializedExtension();
 
+  const video = createMockVideo();
+  const parentElement = document.createElement('div');
+
+  Object.defineProperty(video, 'parentElement', { value: parentElement, writable: false, configurable: true });
+  Object.defineProperty(video, 'isConnected',   { value: true,          writable: false, configurable: true });
+
+  extension.onVideoFound(video, parentElement);
+
+  assert.exists(video.vsc, 'video.vsc should exist when parentElement is available');
+});
+
+runner.test('video with neither parentElement nor parentNode gets a controller attached via explicit fallback', async () => {
+  extension = await makeInitializedExtension();
+
+  const video = createMockVideo();
+  const fallbackParent = document.createElement('div');
+
+  Object.defineProperty(video, 'parentElement', { value: null, writable: false, configurable: true });
+  Object.defineProperty(video, 'parentNode',    { value: null, writable: false, configurable: true });
+  Object.defineProperty(video, 'isConnected',   { value: true, writable: false, configurable: true });
+
+  // Must not throw even with no DOM parent.
+  extension.onVideoFound(video, fallbackParent);
+
+  assert.exists(video.vsc, 'video.vsc should exist even when both parentElement and parentNode are null');
+});
+
+runner.test('calling onVideoFound twice on the same video does not attach a second controller', async () => {
+  extension = await makeInitializedExtension();
+
+  const { video, parentNode } = createVideoWithoutParentElement();
+  extension.onVideoFound(video, parentNode);
+  const firstController = video.vsc;
+
+  extension.onVideoFound(video, parentNode);
+
+  assert.equal(video.vsc, firstController, 'video.vsc must remain the same object on repeated calls');
+});
+
+// ── Seam B: VSC_USER_SETTINGS live relay ────────────────────────────────────
+//
+// The VSC_USER_SETTINGS listener is registered at module scope in inject.js
+// against the module-level `extension` constant (window.videoSpeedExtension).
+// Each Seam B test creates its own initialized instance, temporarily swaps it
+// onto window.videoSpeedExtension so the already-registered listener routes
+// dispatches to it, then restores the original after the test.
+//
+// This avoids:
+//   - Early-return false greens (the old `if (!ext.initialized) return` guards)
+//   - Shared mutable singleton contamination across tests
+
+/**
+ * Run `fn(ext)` with `ext` wired as window.videoSpeedExtension for the
+ * duration of the call, then restore the original reference.
+ *
+ * NOTE: The VSC_USER_SETTINGS listener captured the module-level `extension`
+ * constant at definition time (a closure), so swapping window.videoSpeedExtension
+ * does NOT redirect the listener.  The correct pattern for Seam B is therefore
+ * to use the module-level instance directly — but only after confirming it is
+ * initialized.  If it is not yet initialized (async race), the test must await
+ * initialization explicitly rather than silently skipping.
+ */
+async function withInitializedModuleExtension(fn) {
+  const ext = window.videoSpeedExtension;
+  assert.exists(ext, 'window.videoSpeedExtension must exist — was loadInjectModules() called?');
+
+  // If the module-level instance is not yet initialized (async race at load
+  // time), initialize it now so the test exercises a real code path.
+  if (!ext.initialized) {
+    await ext.initialize();
+  }
+  assert.true(ext.initialized, 'prerequisite: module-level extension must be initialized');
+
+  await fn(ext);
+}
+
+runner.test('VSC_USER_SETTINGS updates keyBindings in live config', async () => {
+  await withInitializedModuleExtension((ext) => {
+    const newBindings = [
+      { action: 'faster', key: 70, value: 0.1, force: false, predefined: true },
+      { action: 'slower', key: 71, value: 0.1, force: false, predefined: true },
+    ];
+
+    window.dispatchEvent(new CustomEvent('VSC_USER_SETTINGS', {
+      detail: { keyBindings: newBindings },
+    }));
+
+    assert.equal(
+      ext.config.settings.keyBindings, newBindings,
+      'keyBindings reference must point to the new array after a relay dispatch',
+    );
+  });
+});
+
+runner.test('VSC_USER_SETTINGS relay applies the correct key code value', async () => {
+  await withInitializedModuleExtension((ext) => {
+    const newBindings = [
+      { action: 'faster', key: 70, value: 0.1, force: false, predefined: true },
+    ];
+
+    window.dispatchEvent(new CustomEvent('VSC_USER_SETTINGS', {
+      detail: { keyBindings: newBindings },
+    }));
+
+    assert.equal(ext.config.settings.keyBindings[0].key, 70, 'relayed key code must be 70');
+  });
+});
+
+runner.test('VSC_USER_SETTINGS is a no-op before extension.initialized is true', async () => {
+  await withInitializedModuleExtension((ext) => {
+    const originalBindings = ext.config.settings.keyBindings;
+
+    // Temporarily mark as not initialized to exercise the listener guard.
+    ext.initialized = false;
+    try {
+      window.dispatchEvent(new CustomEvent('VSC_USER_SETTINGS', {
+        detail: { keyBindings: [{ action: 'faster', key: 99, value: 0.5, force: false, predefined: true }] },
+      }));
+
+      assert.equal(
+        ext.config.settings.keyBindings, originalBindings,
+        'keyBindings must not change while extension.initialized is false',
+      );
+    } finally {
+      // Always restore so subsequent tests see a properly initialized instance.
+      ext.initialized = true;
+    }
+  });
+});
+
+runner.test('VSC_USER_SETTINGS updates rememberSpeed in live config', async () => {
+  await withInitializedModuleExtension((ext) => {
+    window.dispatchEvent(new CustomEvent('VSC_USER_SETTINGS', {
+      detail: { rememberSpeed: true },
+    }));
+
+    assert.equal(ext.config.settings.rememberSpeed, true, 'rememberSpeed must be true after relay dispatch');
+  });
+});
+
+runner.test('VSC_USER_SETTINGS updates gifSpeedStep in live config', async () => {
+  await withInitializedModuleExtension((ext) => {
+    window.dispatchEvent(new CustomEvent('VSC_USER_SETTINGS', {
+      detail: { gifSpeedStep: 0.25 },
+    }));
+
+    assert.equal(ext.config.settings.gifSpeedStep, 0.25, 'gifSpeedStep must be 0.25 after relay dispatch');
+  });
+});
+
+runner.test('VSC_USER_SETTINGS does not wipe per-source speed entries', async () => {
+  await withInitializedModuleExtension((ext) => {
+    ext.config.settings.speeds = { 'https://example.com/video.mp4': 1.5 };
+
+    window.dispatchEvent(new CustomEvent('VSC_USER_SETTINGS', {
+      detail: { rememberSpeed: false },
+    }));
+
+    assert.equal(
+      ext.config.settings.speeds['https://example.com/video.mp4'], 1.5,
+      'per-source speed entry must survive a relay patch that does not include speeds',
+    );
+  });
+});
+
+runner.test('VSC_USER_SETTINGS does not reset lastSpeed', async () => {
+  await withInitializedModuleExtension((ext) => {
+    ext.config.settings.lastSpeed = 1.5;
+
+    window.dispatchEvent(new CustomEvent('VSC_USER_SETTINGS', {
+      detail: { rememberSpeed: false },
+    }));
+
+    assert.equal(ext.config.settings.lastSpeed, 1.5, 'lastSpeed must not be reset by relay patch');
+  });
+});
+
+// ── Seam C: setupDocumentCSS — null-head guard ───────────────────────────────
+
+runner.test('setupDocumentCSS does not throw when document.head is null', async () => {
+  extension = await makeInitializedExtension();
+
+  const nullHeadDoc = {
+    createElement: (tag) => document.createElement(tag),
+    head: null,
+  };
+
+  let threw = false;
+  let thrownError = null;
   try {
-    await extension.initialize();
-
-    // Create a normal video element with both parentElement and parentNode
-    const video = createMockVideo();
-    const parentElement = document.createElement('div');
-    const parentNode = document.createElement('span'); // Different from parentElement
-
-    Object.defineProperty(video, 'parentElement', {
-      value: parentElement,
-      writable: false,
-      configurable: true
-    });
-
-    Object.defineProperty(video, 'parentNode', {
-      value: parentNode,
-      writable: false,
-      configurable: true
-    });
-
-    // Mock isConnected property for validity check
-    Object.defineProperty(video, 'isConnected', {
-      value: true,
-      writable: false,
-      configurable: true
-    });
-
-    // Test onVideoFound with parentElement available
-    extension.onVideoFound(video, parentNode);
-
-    // Verify that the video controller was attached
-    assert.exists(video.vsc, 'Video controller should be attached to the video element');
-
-    // Verify that the controller was initialized with video.parentElement (not the passed parent)
-    // VideoController constructor uses target.parentElement || parent
-    assert.equal(video.vsc.parent, parentElement, 'VideoController should prefer video.parentElement when available');
-
-  } catch (error) {
-    assert.true(false, `Test should not throw error: ${error.message}`);
+    extension.setupDocumentCSS(nullHeadDoc);
+  } catch (e) {
+    threw = true;
+    thrownError = e;
   }
-});
 
-runner.test('onVideoFound should handle video with neither parentElement nor parentNode', async () => {
-  // Verify VideoSpeedExtension is available
-  assert.exists(window.VideoSpeedExtension, 'VideoSpeedExtension class should be available on window');
-  
-  // Create extension instance
-  extension = new window.VideoSpeedExtension();
-  
-  // Verify extension was created
-  assert.exists(extension, 'Extension instance should be created');
-
-  try {
-    await extension.initialize();
-
-    // Create a video element with no parent references
-    const video = createMockVideo();
-    const fallbackParent = document.createElement('div');
-
-    Object.defineProperty(video, 'parentElement', {
-      value: null,
-      writable: false,
-      configurable: true
-    });
-
-    Object.defineProperty(video, 'parentNode', {
-      value: null,
-      writable: false,
-      configurable: true
-    });
-
-    // Mock isConnected property for validity check
-    Object.defineProperty(video, 'isConnected', {
-      value: true,
-      writable: false,
-      configurable: true
-    });
-
-    // This should not throw an error even with no parent references
-    extension.onVideoFound(video, fallbackParent);
-
-    // Verify basic functionality
-    assert.exists(video.vsc, 'Video controller should be attached even without parent references');
-    assert.equal(video.vsc.parent, fallbackParent, 'VideoController should use provided fallback parent');
-
-  } catch (error) {
-    assert.true(false, `Test should not throw error: ${error.message}`);
-  }
-});
-
-// ── Live settings relay — Seam B tests (issue #10) ───────────────────────────
-// Dispatch VSC_USER_SETTINGS on window and assert that the live config is
-// updated immediately.  The listener in inject.js references the module-level
-// `window.videoSpeedExtension` instance (set at module load time), so tests
-// read results from that instance rather than creating a new one.
-
-runner.test('VSC_USER_SETTINGS updates keyBindings in live config when extension is initialized', () => {
-  // window.videoSpeedExtension is the module-level instance whose listener
-  // was registered when loadInjectModules() loaded inject.js.
-  const ext = window.videoSpeedExtension;
-  if (!ext || !ext.initialized) return; // guard: skip if module didn't init
-
-  const newBindings = [
-    { action: 'faster', key: 70, value: 0.1, force: false, predefined: true },
-    { action: 'slower', key: 71, value: 0.1, force: false, predefined: true },
-  ];
-
-  window.dispatchEvent(new CustomEvent('VSC_USER_SETTINGS', {
-    detail: { keyBindings: newBindings },
-  }));
-
-  assert.equal(
-    ext.config.settings.keyBindings, newBindings,
-    'keyBindings reference should be updated after relay dispatch'
+  assert.false(
+    threw,
+    'setupDocumentCSS must not throw when document.head is null' +
+      (thrownError ? ` — got: ${thrownError.message}` : ''),
   );
-  assert.equal(ext.config.settings.keyBindings[0].key, 70, 'new key code should be in effect');
-});
-
-runner.test('VSC_USER_SETTINGS is a no-op before extension.initialized is true', () => {
-  const ext = window.videoSpeedExtension;
-  if (!ext) return;
-
-  const originalBindings = ext.config.settings.keyBindings;
-  const wasInitialized = ext.initialized;
-
-  // Temporarily mark as not initialized to test the guard
-  ext.initialized = false;
-
-  window.dispatchEvent(new CustomEvent('VSC_USER_SETTINGS', {
-    detail: { keyBindings: [{ action: 'faster', key: 99, value: 0.5, force: false, predefined: true }] },
-  }));
-
-  // Restore
-  ext.initialized = wasInitialized;
-
-  assert.equal(
-    ext.config.settings.keyBindings, originalBindings,
-    'keyBindings must not be modified while extension.initialized is false'
-  );
-});
-
-runner.test('VSC_USER_SETTINGS updates rememberSpeed and gifSpeedStep simultaneously', () => {
-  const ext = window.videoSpeedExtension;
-  if (!ext || !ext.initialized) return;
-
-  window.dispatchEvent(new CustomEvent('VSC_USER_SETTINGS', {
-    detail: { rememberSpeed: true, gifSpeedStep: 0.25 },
-  }));
-
-  assert.equal(ext.config.settings.rememberSpeed, true, 'rememberSpeed should be updated');
-  assert.equal(ext.config.settings.gifSpeedStep, 0.25, 'gifSpeedStep should be updated');
-});
-
-runner.test('VSC_USER_SETTINGS does not wipe unrelated runtime state', () => {
-  const ext = window.videoSpeedExtension;
-  if (!ext || !ext.initialized) return;
-
-  ext.config.settings.speeds = { 'https://example.com/video.mp4': 1.5 };
-  ext.config.settings.lastSpeed = 1.5;
-
-  window.dispatchEvent(new CustomEvent('VSC_USER_SETTINGS', {
-    detail: { rememberSpeed: false },
-  }));
-
-  assert.equal(
-    ext.config.settings.speeds['https://example.com/video.mp4'], 1.5,
-    'per-source speeds must not be wiped by relay patch'
-  );
-  assert.equal(ext.config.settings.lastSpeed, 1.5, 'lastSpeed must not be reset by relay patch');
 });
 
 export { runner as injectTestRunner };

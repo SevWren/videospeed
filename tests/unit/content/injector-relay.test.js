@@ -13,8 +13,14 @@
  * if the mock regresses, these tests catch it before the Seam B tests run.
  */
 
+import { readFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { installChromeMock, cleanupChromeMock, resetMockStorage } from '../../helpers/chrome-mock.js';
 import { SimpleTestRunner, assert } from '../../helpers/test-utils.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const runner = new SimpleTestRunner();
 
@@ -25,6 +31,7 @@ const USER_CONTROLLED_KEYS = new Set([
   'keyBindings', 'rememberSpeed', 'forceLastSavedSpeed', 'audioBoolean',
   'startHidden', 'controllerOpacity', 'controllerButtonSize', 'logLevel',
   'blacklist', 'enabled', 'gifSpeedStep',
+  'hoverActivatesVideoTarget', 'hoverActivatesGifTarget',
 ]);
 
 function buildRelayPatch(changes) {
@@ -149,8 +156,34 @@ runner.test('all USER_CONTROLLED_KEYS pass through the relay', () => {
   }
 });
 
+// ── Fix D: single storage.onChanged relay listener (structural source guard) ───
+// Regression guard: injector.js must register exactly ONE chrome.storage.onChanged
+// listener inside setupMessageBridge(). A previous version registered two listeners
+// (one with 10 keys, one with 11 keys). Every options-page save fired
+// VSC_USER_SETTINGS twice per tab.
+//
+// This is a STRUCTURAL test (reads the production source file directly) rather than
+// a behavioral one. injector.js is a content script that cannot be loaded as an ES
+// module in JSDOM, so a behavioral test cannot import it and therefore cannot count
+// its actual registered listeners. The structural assertion is the highest available
+// seam for this specific invariant: if the duplicate is re-introduced, the count
+// becomes 2 and this test fails immediately — no browser run needed.
+
+runner.test('Fix D: injector.js registers exactly one chrome.storage.onChanged listener', () => {
+  const src = readFileSync(join(__dirname, '../../../src/content/injector.js'), 'utf8');
+  const matches = (src.match(/chrome\.storage\.onChanged\.addListener/g) || []);
+  assert.equal(
+    matches.length,
+    1,
+    `Fix D: injector.js must have exactly ONE chrome.storage.onChanged.addListener call — ` +
+    `found ${matches.length}. A duplicate causes double VSC_USER_SETTINGS dispatch on every options-page save.`
+  );
+});
+
 runner.test('non-sync area produces no relay dispatch', () => {
-  // Simulate the areaName guard in the injector.js listener
+  installChromeMock();
+  resetMockStorage();
+
   let dispatched = false;
   const origDispatch = window.dispatchEvent.bind(window);
   window.dispatchEvent = (event) => {
@@ -158,17 +191,52 @@ runner.test('non-sync area produces no relay dispatch', () => {
     return origDispatch(event);
   };
 
-  // Simulate: areaName !== 'sync' → early return; patch never dispatched
-  const areaName = 'local';
-  if (areaName === 'sync') {
-    const patch = buildRelayPatch({ keyBindings: { newValue: [] } });
+  // Register a listener that mirrors the full production relay body from
+  // injector.js::setupMessageBridge(). CS-3 exception applies: injector.js is
+  // a content script that cannot be loaded as an ES module in JSDOM.
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== 'sync') return;
+    const patch = buildRelayPatch(changes);
     if (Object.keys(patch).length > 0) {
       window.dispatchEvent(new CustomEvent('VSC_USER_SETTINGS', { detail: patch }));
     }
-  }
+  });
+
+  // Fire with a non-sync area — the guard must suppress dispatch.
+  chrome.storage.onChanged.triggerStorageChange(
+    { keyBindings: { newValue: [] } },
+    'local'
+  );
 
   window.dispatchEvent = origDispatch;
+  cleanupChromeMock();
+
   assert.equal(dispatched, false, 'VSC_USER_SETTINGS must not be dispatched for non-sync area');
+});
+
+// ── T1: hoverActivatesVideoTarget / hoverActivatesGifTarget in USER_CONTROLLED_KEYS (issue #32) ──
+// Structural source test (CS-3 exception): injector.js is a content script that cannot be
+// loaded as an ES module in JSDOM.  We read the production source directly and assert that
+// both keys appear inside the _VSC_USER_CONTROLLED_KEYS Set literal.
+
+runner.test('[T1] injector.js _VSC_USER_CONTROLLED_KEYS must contain hoverActivatesVideoTarget', () => {
+  const src = readFileSync(join(__dirname, '../../../src/content/injector.js'), 'utf8');
+  assert.equal(
+    src.includes("'hoverActivatesVideoTarget'"),
+    true,
+    "'hoverActivatesVideoTarget' must be present in injector.js _VSC_USER_CONTROLLED_KEYS — " +
+    'without it, Options-page changes for this setting silently fail to relay to open tabs',
+  );
+});
+
+runner.test('[T1] injector.js _VSC_USER_CONTROLLED_KEYS must contain hoverActivatesGifTarget', () => {
+  const src = readFileSync(join(__dirname, '../../../src/content/injector.js'), 'utf8');
+  assert.equal(
+    src.includes("'hoverActivatesGifTarget'"),
+    true,
+    "'hoverActivatesGifTarget' must be present in injector.js _VSC_USER_CONTROLLED_KEYS — " +
+    'without it, Options-page changes for this setting silently fail to relay to open tabs',
+  );
 });
 
 export default runner;

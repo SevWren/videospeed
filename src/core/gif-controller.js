@@ -45,6 +45,7 @@ if (!window.VSC.GifController) {
       this._visibilityChangeHandler = null;
       this._origImgCssText = null;
       this._rafRunning = false;
+      this._hoverDwellTimer = null;
     }
 
     static async create(imgElement, parent, config, actionHandler) {
@@ -121,7 +122,8 @@ if (!window.VSC.GifController) {
         // loopCount = 0 means infinite (Netscape extension convention).
         // When the Netscape extension is absent gifuct returns undefined/null;
         // default to 0 (infinite) to match what every browser does.
-        gc._loopCount = parsed.loopCount == null ? 0 : parsed.loopCount;
+        gc._loopCount =
+          parsed.loopCount === null || parsed.loopCount === undefined ? 0 : parsed.loopCount;
 
         // E-2: Reject GIFs smaller than GIF_MIN_SIZE_PX in either dimension before
         // allocating memory.  1×1 tracking-pixel GIFs (e.g. cleardot.gif) are
@@ -139,7 +141,10 @@ if (!window.VSC.GifController) {
         // "show the background", so starting with the right background avoids
         // those areas appearing as transparent-black.
         const bgIdx = parsed.lsd?.backgroundColorIndex;
-        gc._bgColor = bgIdx != null && parsed.gct && parsed.gct[bgIdx] ? parsed.gct[bgIdx] : null;
+        gc._bgColor =
+          bgIdx !== null && bgIdx !== undefined && parsed.gct && parsed.gct[bgIdx]
+            ? parsed.gct[bgIdx]
+            : null;
 
         // Check per-GIF size limit before allocating (need frame count estimate from parsed)
         // We use parsed.frames.length if available, else defer to after decompressFrames
@@ -365,7 +370,9 @@ if (!window.VSC.GifController) {
             gc._allocatedBytes = 0;
             window.VSC.GifFrameCache?.releaseAllocation(b);
           }
-        } catch (_) {}
+        } catch (_) {
+          // Silently swallow — allocation state already reset above
+        }
         return null;
       }
     }
@@ -392,6 +399,7 @@ if (!window.VSC.GifController) {
         if (src.startsWith('file://')) {
           return new Promise((resolve) => {
             const requestId = `vsc-gif-${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
+            // eslint-disable-next-line prefer-const -- assigned after messageHandler is defined
             let timeoutHandle;
 
             const messageHandler = (event) => {
@@ -631,6 +639,7 @@ if (!window.VSC.GifController) {
         // Create controller wrapper div
         const div = document.createElement('div');
         div.classList.add('vsc-controller');
+        div.setAttribute('tabindex', '-1');
         if (this._config.settings.startHidden) {
           div.classList.add('vsc-hidden');
           div.style.display = 'none';
@@ -668,6 +677,33 @@ if (!window.VSC.GifController) {
           ) {
             this._actionHandler._saveGifSpeedDebounced(newSpeed);
           }
+        });
+
+        // Hover-to-activate: mouseenter/mouseleave on the GIF overlay shadow host.
+        // hoverActivatesGifTarget defaults to false (opt-in unlike video hover).
+        this._hoverDwellTimer = null;
+
+        div.addEventListener('mouseenter', () => {
+          if (!this._config.settings.hoverActivatesGifTarget) {
+            return;
+          }
+          this._hoverDwellTimer = setTimeout(() => {
+            this._hoverDwellTimer = null;
+            if (this._actionHandler && typeof this._actionHandler.setHoverTarget === 'function') {
+              this._actionHandler.setHoverTarget(this.div);
+            }
+            if (!document.hasFocus()) {
+              this.div.focus({ preventScroll: true });
+            }
+          }, window.VSC.Constants.HOVER_DWELL_MS);
+        });
+
+        div.addEventListener('mouseleave', () => {
+          if (this._hoverDwellTimer !== null) {
+            clearTimeout(this._hoverDwellTimer);
+            this._hoverDwellTimer = null;
+          }
+          // Intentionally NOT clearing setHoverTarget — sticky hover
         });
       } catch (err) {
         window.VSC.logger.error(`GifController._initializeControls failed: ${err.message}`);
@@ -784,6 +820,11 @@ if (!window.VSC.GifController) {
         if (this._visibilityPauseTimer) {
           clearTimeout(this._visibilityPauseTimer);
           this._visibilityPauseTimer = null;
+        }
+        // 3a. Clear hover dwell timer
+        if (this._hoverDwellTimer !== null) {
+          clearTimeout(this._hoverDwellTimer);
+          this._hoverDwellTimer = null;
         }
         if (this._visibilityChangeHandler) {
           document.removeEventListener('visibilitychange', this._visibilityChangeHandler);

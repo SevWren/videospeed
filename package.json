@@ -14,11 +14,16 @@
     "lint": "eslint src/**/*.js tests/**/*.js",
     "lint:fix": "eslint src/**/*.js tests/**/*.js --fix",
     "format": "prettier --write src/**/*.js tests/**/*.js",
-    "build": "npm run lint:fix && npm run format && npm run test",
+    "build": "npm run check:manifest && npm run check:invariants && npm run lint:fix && npm run format && npm run test",
+    "check:manifest": "node scripts/check-manifest.js",
+    "check:invariants": "node scripts/check-invariants.js",
+    "coverage": "c8 node tests/run-tests.js",
+    "coverage:json": "c8 --reporter=json node tests/run-tests.js",
     "zip": "rm -rf dist && mkdir -p dist/videospeed && cp -r manifest.json src dist/videospeed/ && cp README.md PRIVACY.md CONTRIBUTING.md dist/videospeed/ && cd dist && zip -r videospeed.zip videospeed && cd .. && echo 'Extension packaged at dist/videospeed.zip'"
   },
   "devDependencies": {
     "@eslint/js": "^8.57.0",
+    "c8": "^12.0.0",
     "eslint": "^8.57.1",
     "globals": "^13.24.0",
     "jsdom": "^23.2.0",
@@ -26,7 +31,9 @@
     "puppeteer": "^24.10.2"
   },
   "eslintConfig": {
-    "ignorePatterns": ["src/lib/*.min.js"],
+    "ignorePatterns": [
+      "src/lib/*.min.js"
+    ],
     "env": {
       "browser": true,
       "es2022": true,

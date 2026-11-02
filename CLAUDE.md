@@ -12,9 +12,8 @@ Video Speed Controller is a Chrome WebExtension (Manifest V3) that lets users co
 
 Core extension code lives in `src/`:
 - `src/core/` — playback state, actions, settings, and storage (`video-controller.js`, `action-handler.js`, `settings.js`, `storage-manager.js`); also `gif-frame-engine.js` (frame timing, `effectiveDelay` calculation) and `gif-controller.js` (canvas replacement, rAF loop, memory budget, speed control, overlay)
-- `src/content/` — content script entry point (`injector.js`, `inject.js`)
+- `src/content/` — content script entry point (`injector.js`, `inject.js`). `injector.js::setupMessageBridge()` contains **exactly one** `chrome.storage.onChanged` listener (the live settings relay). Adding a second listener double-fires `VSC_USER_SETTINGS` on every options-page save. The invariant is enforced by `npm run check:invariants`.
 - `src/background.js` — service worker (MV3)
-- `src/module-loader.js` — extension runtime wiring
 - `src/ui/` — controller UI (`controls.js`, `shadow-dom.js`, `drag-handler.js`), popup, and options page
 - `src/observers/` — media and DOM observers (`media-observer.js`, `mutation-observer.js`); also `gif-observer.js` (GIF detection utilities: `isGifSrc`, `isGifElement`, `detectGifsInDOM`; watches `src` attribute changes for lazy-loaded GIFs via `MutationObserver`)
 - `src/site-handlers/` — per-site behavior: `youtube-handler.js`, `netflix-handler.js`, `amazon-handler.js`, `apple-handler.js`, `facebook-handler.js`, `base-handler.js`

@@ -21,7 +21,7 @@ runner.afterEach(() => {
   Object.defineProperty(global.location, 'href', {
     value: runner.originalHref,
     writable: true,
-    configurable: true
+    configurable: true,
   });
 });
 
@@ -29,102 +29,134 @@ function setTestURL(url) {
   Object.defineProperty(global.location, 'href', {
     value: url,
     writable: true,
-    configurable: true
+    configurable: true,
   });
 }
 
-runner.test('should parse regex patterns WITHOUT flags', () => {
+runner.test('should blacklist www.youtube.com with regex pattern without flags', () => {
   const blacklist = '/(.+)youtube\\.com(\\/*)$/';
-  
-  const testCases = [
-    { url: 'https://www.youtube.com/', shouldMatch: true },
-    { url: 'https://music.youtube.com/', shouldMatch: true },
-    { url: 'https://m.youtube.com/', shouldMatch: true },
-    { url: 'https://example.com/', shouldMatch: false }
-  ];
-
-  testCases.forEach(({ url, shouldMatch }) => {
-    setTestURL(url);
-    const result = window.VSC.DomUtils.isBlacklisted(blacklist);
-    assert.equal(result, shouldMatch, `URL ${url} should ${shouldMatch ? 'match' : 'not match'} pattern ${blacklist}`);
-  });
+  setTestURL('https://www.youtube.com/');
+  assert.equal(window.VSC.DomUtils.isBlacklisted(blacklist), true);
 });
 
-runner.test('should parse regex patterns WITH flags', () => {
+runner.test('should blacklist music.youtube.com with regex pattern without flags', () => {
+  const blacklist = '/(.+)youtube\\.com(\\/*)$/';
+  setTestURL('https://music.youtube.com/');
+  assert.equal(window.VSC.DomUtils.isBlacklisted(blacklist), true);
+});
+
+runner.test('should blacklist m.youtube.com with regex pattern without flags', () => {
+  const blacklist = '/(.+)youtube\\.com(\\/*)$/';
+  setTestURL('https://m.youtube.com/');
+  assert.equal(window.VSC.DomUtils.isBlacklisted(blacklist), true);
+});
+
+runner.test('should not blacklist example.com with youtube regex pattern', () => {
+  const blacklist = '/(.+)youtube\\.com(\\/*)$/';
+  setTestURL('https://example.com/');
+  assert.equal(window.VSC.DomUtils.isBlacklisted(blacklist), false);
+});
+
+runner.test('should blacklist www.youtube.com with case-insensitive regex pattern', () => {
   const blacklist = '/(.+)youtube\\.com(\\/*)$/gi';
-  
-  const testCases = [
-    { url: 'https://www.youtube.com/', shouldMatch: true },
-    { url: 'https://YOUTUBE.COM/', shouldMatch: true }, // case insensitive with 'i' flag
-    { url: 'https://music.youtube.com/', shouldMatch: true },
-    { url: 'https://example.com/', shouldMatch: false }
-  ];
-
-  testCases.forEach(({ url, shouldMatch }) => {
-    setTestURL(url);
-    const result = window.VSC.DomUtils.isBlacklisted(blacklist);
-    assert.equal(result, shouldMatch, `URL ${url} should ${shouldMatch ? 'match' : 'not match'} pattern ${blacklist}`);
-  });
+  setTestURL('https://www.youtube.com/');
+  assert.equal(window.VSC.DomUtils.isBlacklisted(blacklist), true);
 });
 
-runner.test('should handle simple string patterns', () => {
+runner.test('should blacklist uppercase YOUTUBE.COM using i flag in regex pattern', () => {
+  const blacklist = '/(.+)youtube\\.com(\\/*)$/gi';
+  setTestURL('https://YOUTUBE.COM/');
+  assert.equal(window.VSC.DomUtils.isBlacklisted(blacklist), true);
+});
+
+runner.test('should blacklist music.youtube.com with case-insensitive regex pattern', () => {
+  const blacklist = '/(.+)youtube\\.com(\\/*)$/gi';
+  setTestURL('https://music.youtube.com/');
+  assert.equal(window.VSC.DomUtils.isBlacklisted(blacklist), true);
+});
+
+runner.test('should not blacklist example.com with case-insensitive youtube regex pattern', () => {
+  const blacklist = '/(.+)youtube\\.com(\\/*)$/gi';
+  setTestURL('https://example.com/');
+  assert.equal(window.VSC.DomUtils.isBlacklisted(blacklist), false);
+});
+
+runner.test('should blacklist a URL that contains a plain string blacklist entry', () => {
   const blacklist = 'youtube.com';
-  
   setTestURL('https://www.youtube.com/watch?v=123');
-  const result = window.VSC.DomUtils.isBlacklisted(blacklist);
-  assert.equal(result, true);
+  assert.equal(window.VSC.DomUtils.isBlacklisted(blacklist), true);
 });
 
-runner.test('should handle multiple blacklist entries with mixed formats', () => {
+runner.test('should blacklist youtube.com matched by plain string entry in multi-entry blacklist', () => {
   const blacklist = `youtube.com
 /(.+)instagram\\.com/
 /twitter\\.com/gi`;
-  
-  const testCases = [
-    { url: 'https://www.youtube.com/', shouldMatch: true },
-    { url: 'https://www.instagram.com/', shouldMatch: true },
-    { url: 'https://twitter.com/', shouldMatch: true },
-    { url: 'https://TWITTER.COM/', shouldMatch: true }, // case insensitive
-    { url: 'https://example.com/', shouldMatch: false }
-  ];
-
-  testCases.forEach(({ url, shouldMatch }) => {
-    setTestURL(url);
-    const result = window.VSC.DomUtils.isBlacklisted(blacklist);
-    assert.equal(result, shouldMatch, `URL ${url} should ${shouldMatch ? 'match' : 'not match'}`);
-  });
+  setTestURL('https://www.youtube.com/');
+  assert.equal(window.VSC.DomUtils.isBlacklisted(blacklist), true);
 });
 
-runner.test('should handle malformed regex patterns gracefully', () => {
+runner.test('should blacklist instagram.com matched by regex entry in multi-entry blacklist', () => {
+  const blacklist = `youtube.com
+/(.+)instagram\\.com/
+/twitter\\.com/gi`;
+  setTestURL('https://www.instagram.com/');
+  assert.equal(window.VSC.DomUtils.isBlacklisted(blacklist), true);
+});
+
+runner.test('should blacklist twitter.com matched by case-insensitive regex in multi-entry blacklist', () => {
+  const blacklist = `youtube.com
+/(.+)instagram\\.com/
+/twitter\\.com/gi`;
+  setTestURL('https://twitter.com/');
+  assert.equal(window.VSC.DomUtils.isBlacklisted(blacklist), true);
+});
+
+runner.test('should blacklist uppercase TWITTER.COM using i flag in multi-entry blacklist', () => {
+  const blacklist = `youtube.com
+/(.+)instagram\\.com/
+/twitter\\.com/gi`;
+  setTestURL('https://TWITTER.COM/');
+  assert.equal(window.VSC.DomUtils.isBlacklisted(blacklist), true);
+});
+
+runner.test('should not blacklist example.com when it appears in no multi-entry blacklist entry', () => {
+  const blacklist = `youtube.com
+/(.+)instagram\\.com/
+/twitter\\.com/gi`;
+  setTestURL('https://example.com/');
+  assert.equal(window.VSC.DomUtils.isBlacklisted(blacklist), false);
+});
+
+runner.test('should not throw when blacklist contains malformed regex entries', () => {
   const blacklist = `//
 /[unclosed
 /valid\\.com/`;
-  
   setTestURL('https://valid.com/');
-  
-  // Should not throw and should match the valid pattern
-  let result;
   let threwError = false;
   try {
-    result = window.VSC.DomUtils.isBlacklisted(blacklist);
+    window.VSC.DomUtils.isBlacklisted(blacklist);
   } catch (e) {
     threwError = true;
   }
-  
   assert.equal(threwError, false, 'Should not throw on malformed regex');
-  assert.equal(result, true, 'Should match valid pattern despite malformed entries');
 });
 
-runner.test('should handle empty patterns', () => {
+runner.test('should blacklist a valid entry even when blacklist also contains malformed regex entries', () => {
+  const blacklist = `//
+/[unclosed
+/valid\\.com/`;
+  setTestURL('https://valid.com/');
+  assert.equal(window.VSC.DomUtils.isBlacklisted(blacklist), true);
+});
+
+runner.test('should blacklist a URL when blacklist has blank lines around entries', () => {
   const blacklist = `
-    
+
 youtube.com
 
 `;
-  
   setTestURL('https://www.youtube.com/');
-  const result = window.VSC.DomUtils.isBlacklisted(blacklist);
-  assert.equal(result, true);
+  assert.equal(window.VSC.DomUtils.isBlacklisted(blacklist), true);
 });
 
 // Export for test runner

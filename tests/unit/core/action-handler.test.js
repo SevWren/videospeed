@@ -357,4 +357,425 @@ runner.test('ActionHandler should work with videos in nested shadow DOM', async 
   assert.equal(mockVideo.vsc.speedIndicator.textContent, '2.50');
 });
 
+// ---------------------------------------------------------------------------
+// T-actions-utils: cover lines 458, 512-533, 542-550, 557-566
+// ---------------------------------------------------------------------------
+
+runner.test('ActionHandler blinkController hides video controller after timeout', async () => {
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  const eventManager = new window.VSC.EventManager(config, null);
+  const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+  const controller = document.createElement('div');
+  // Start hidden so the blink branch activates
+  controller.classList.add('vsc-hidden');
+
+  const mockVideo = createMockVideo();
+  mockVideo.vsc = { div: controller, speedIndicator: { textContent: '1.00' } };
+  config.addMediaElement(mockVideo);
+
+  actionHandler.blinkController(controller, 50);
+
+  // After blink the controller must be visible immediately
+  assert.false(controller.classList.contains('vsc-hidden'), 'controller should be visible after blink');
+
+  // After the timeout it must be hidden again
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  assert.true(controller.classList.contains('vsc-hidden'), 'controller should be hidden after blink timeout');
+});
+
+runner.test('ActionHandler blinkController keeps audio controller visible after blink (no re-hide)', async () => {
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  const eventManager = new window.VSC.EventManager(config, null);
+  const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+  const controller = document.createElement('div');
+  controller.classList.add('vsc-hidden');
+
+  // Register an AUDIO element whose vsc.div points to this controller
+  const audioEl = document.createElement('audio');
+  audioEl.vsc = { div: controller, speedIndicator: { textContent: '1.00' } };
+  config.addMediaElement(audioEl);
+
+  actionHandler.blinkController(controller, 50);
+
+  assert.false(controller.classList.contains('vsc-hidden'), 'audio controller should be visible after blink');
+
+  // Audio controllers must NOT be re-hidden — wait past what would be a video timeout
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  assert.false(controller.classList.contains('vsc-hidden'), 'audio controller must remain visible after blink timeout');
+});
+
+runner.test('ActionHandler isAudioController returns true for audio element', async () => {
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  const eventManager = new window.VSC.EventManager(config, null);
+  const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+  const controller = document.createElement('div');
+  const audioEl = document.createElement('audio');
+  audioEl.vsc = { div: controller };
+  config.addMediaElement(audioEl);
+
+  assert.true(actionHandler.isAudioController(controller), 'should return true for audio element controller');
+});
+
+runner.test('ActionHandler isAudioController returns false for video element', async () => {
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  const eventManager = new window.VSC.EventManager(config, null);
+  const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+  const controller = document.createElement('div');
+  const mockVideo = createMockVideo();
+  mockVideo.vsc = { div: controller, speedIndicator: { textContent: '1.00' } };
+  config.addMediaElement(mockVideo);
+
+  assert.false(actionHandler.isAudioController(controller), 'should return false for video element controller');
+});
+
+runner.test('ActionHandler isAudioController returns false when no media elements match controller', async () => {
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  const eventManager = new window.VSC.EventManager(config, null);
+  const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+  const orphanController = document.createElement('div');
+  // No media element references this controller
+  assert.false(actionHandler.isAudioController(orphanController), 'should return false when no media element matches');
+});
+
+runner.test('ActionHandler adjustSpeed increases speed by delta', async () => {
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  const eventManager = new window.VSC.EventManager(config, null);
+  const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+  // Clear any previously registered elements so getMediaElements()[0] is our video
+  config.mediaElements.length = 0;
+
+  const mockVideo = createMockVideo({ playbackRate: 1.0 });
+  mockVideo.vsc = { div: mockDOM.container, speedIndicator: { textContent: '1.00' } };
+  config.addMediaElement(mockVideo);
+
+  actionHandler.adjustSpeed(0.5);
+
+  assert.equal(mockVideo.playbackRate, 1.5);
+});
+
+runner.test('ActionHandler adjustSpeed does not exceed MAX speed limit', async () => {
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  const eventManager = new window.VSC.EventManager(config, null);
+  const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+  config.mediaElements.length = 0;
+
+  const mockVideo = createMockVideo({ playbackRate: 15.5 });
+  mockVideo.vsc = { div: mockDOM.container, speedIndicator: { textContent: '15.50' } };
+  config.addMediaElement(mockVideo);
+
+  actionHandler.adjustSpeed(2.0);
+
+  assert.equal(mockVideo.playbackRate, window.VSC.Constants.SPEED_LIMITS.MAX);
+});
+
+runner.test('ActionHandler adjustSpeed does not drop below MIN speed limit', async () => {
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  const eventManager = new window.VSC.EventManager(config, null);
+  const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+  config.mediaElements.length = 0;
+
+  const mockVideo = createMockVideo({ playbackRate: 0.1 });
+  mockVideo.vsc = { div: mockDOM.container, speedIndicator: { textContent: '0.10' } };
+  config.addMediaElement(mockVideo);
+
+  actionHandler.adjustSpeed(-0.5);
+
+  assert.equal(mockVideo.playbackRate, window.VSC.Constants.SPEED_LIMITS.MIN);
+});
+
+runner.test('ActionHandler adjustSpeed does nothing when no media elements exist', async () => {
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  const eventManager = new window.VSC.EventManager(config, null);
+  const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+  // No media elements — should not throw
+  actionHandler.adjustSpeed(1.0);
+  assert.true(true, 'adjustSpeed with no media elements must not throw');
+});
+
+runner.test('ActionHandler resetSpeed branches to 1.0 when already at target equal to reset binding', async () => {
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  const eventManager = new window.VSC.EventManager(config, null);
+  const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+  config.mediaElements.length = 0;
+  const mockVideo = createMockVideo({ playbackRate: 1.5 });
+  mockVideo.vsc = { div: mockDOM.container, speedIndicator: { textContent: '1.50' } };
+  config.addMediaElement(mockVideo);
+
+  // Force reset binding to a non-1.0 value so the "target !== 1.0" branch fires.
+  // Video is at 1.5, target is 1.5, getKeyBinding('reset') is 1.5 → same as target
+  // Branch at line 442: target !== 1.0 → setSpeed(video, 1.0)
+  config.setKeyBinding('reset', 1.5);
+  actionHandler.resetSpeed(mockVideo, 1.5);
+
+  assert.equal(mockVideo.playbackRate, 1.0, 'should reset to 1.0 when target equals reset binding and target is not 1.0');
+});
+
+runner.test('ActionHandler resetSpeed toggles to fast speed when already at 1.0 reset binding (lines 446-448)', async () => {
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  const eventManager = new window.VSC.EventManager(config, null);
+  const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+  config.mediaElements.length = 0;
+  const mockVideo = createMockVideo({ playbackRate: 1.0 });
+  mockVideo.vsc = { div: mockDOM.container, speedIndicator: { textContent: '1.00' } };
+  config.addMediaElement(mockVideo);
+
+  // Set reset binding to 1.0 so: playbackRate === target === reset binding === 1.0
+  // Line 442: target !== 1.0 is false → line 446-447: setSpeed(video, getKeyBinding('fast'))
+  config.setKeyBinding('reset', 1.0);
+  const fastSpeed = config.getKeyBinding('fast');
+  actionHandler.resetSpeed(mockVideo, 1.0);
+
+  assert.equal(mockVideo.playbackRate, fastSpeed, 'should toggle to fast speed when at 1.0 and reset binding is 1.0');
+});
+
+runner.test('ActionHandler resetSpeed toggles to reset binding speed when playbackRate equals target but not reset binding (lines 450-452)', async () => {
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  const eventManager = new window.VSC.EventManager(config, null);
+  const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+  config.mediaElements.length = 0;
+  const mockVideo = createMockVideo({ playbackRate: 2.0 });
+  mockVideo.vsc = { div: mockDOM.container, speedIndicator: { textContent: '2.00' } };
+  config.addMediaElement(mockVideo);
+
+  // Set reset binding to something different from the video's current playbackRate
+  // playbackRate === target (2.0) but NOT === getKeyBinding('reset') (1.0)
+  // Line 449-452: setSpeed(video, getKeyBinding('reset'))
+  config.setKeyBinding('reset', 1.0);
+  actionHandler.resetSpeed(mockVideo, 2.0);
+
+  assert.equal(mockVideo.playbackRate, 1.0, 'should toggle to reset speed when at target but target differs from reset binding');
+});
+
+runner.test('ActionHandler resetSpeed saves current speed to reset binding and sets target when not at target (lines 454-457)', async () => {
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  const eventManager = new window.VSC.EventManager(config, null);
+  const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+  config.mediaElements.length = 0;
+  const mockVideo = createMockVideo({ playbackRate: 1.5 });
+  mockVideo.vsc = { div: mockDOM.container, speedIndicator: { textContent: '1.50' } };
+  config.addMediaElement(mockVideo);
+
+  // playbackRate (1.5) !== target (2.0) → outer else: save current playbackRate to reset binding, then setSpeed(target)
+  actionHandler.resetSpeed(mockVideo, 2.0);
+
+  assert.equal(mockVideo.playbackRate, 2.0, 'should set speed to target when not already at target');
+  assert.equal(config.getKeyBinding('reset'), 1.5, 'should save previous playbackRate as reset key binding');
+});
+
+runner.test('ActionHandler pause resumes a paused video (line 427)', async () => {
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  const eventManager = new window.VSC.EventManager(config, null);
+  const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+  const mockVideo = createMockVideo({ paused: true });
+  mockVideo.vsc = {
+    div: mockDOM.container,
+    speedIndicator: { textContent: '1.00' }
+  };
+  config.addMediaElement(mockVideo);
+
+  actionHandler.runAction('pause');
+
+  assert.false(mockVideo.paused, 'paused video must be resumed by pause action');
+});
+
+// ---------------------------------------------------------------------------
+// T2 — ActionHandler hover targeting tests
+// ---------------------------------------------------------------------------
+
+runner.test('ActionHandler _hoverTargetController starts as null', async () => {
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  const eventManager = new window.VSC.EventManager(config, null);
+  const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+  assert.equal(actionHandler._hoverTargetController, null,
+    '_hoverTargetController must be null on construction');
+});
+
+runner.test('ActionHandler setHoverTarget sets _hoverTargetController', async () => {
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  const eventManager = new window.VSC.EventManager(config, null);
+  const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+  const fakeDiv = document.createElement('div');
+  actionHandler.setHoverTarget(fakeDiv);
+
+  assert.equal(actionHandler._hoverTargetController, fakeDiv,
+    'setHoverTarget must store the passed div in _hoverTargetController');
+});
+
+runner.test('ActionHandler hover target narrows action to hovered video only', async () => {
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  const eventManager = new window.VSC.EventManager(config, null);
+  const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+  config.mediaElements.length = 0;
+
+  const ctrl1 = document.createElement('div');
+  const ctrl2 = document.createElement('div');
+
+  const video1 = createMockVideo({ playbackRate: 1.0 });
+  video1.vsc = { div: ctrl1, speedIndicator: { textContent: '1.00' } };
+
+  const video2 = createMockVideo({ playbackRate: 1.0 });
+  video2.vsc = { div: ctrl2, speedIndicator: { textContent: '1.00' } };
+
+  config.addMediaElement(video1);
+  config.addMediaElement(video2);
+
+  actionHandler.setHoverTarget(ctrl1);
+
+  // Keyboard-triggered call: no event object
+  actionHandler.runAction('faster', 0.1, null);
+
+  assert.equal(video1.playbackRate, 1.1, 'hovered video should receive the action');
+  assert.equal(video2.playbackRate, 1.0, 'non-hovered video must not receive the action');
+});
+
+runner.test('ActionHandler mark is a no-op when only hover target is set (no click event)', async () => {
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  const eventManager = new window.VSC.EventManager(config, null);
+  const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+  config.mediaElements.length = 0;
+
+  const ctrl1 = document.createElement('div');
+  const ctrl2 = document.createElement('div');
+
+  const video1 = createMockVideo({ currentTime: 42 });
+  video1.vsc = { div: ctrl1, speedIndicator: { textContent: '1.00' } };
+
+  const video2 = createMockVideo({ currentTime: 10 });
+  video2.vsc = { div: ctrl2, speedIndicator: { textContent: '1.00' } };
+
+  config.addMediaElement(video1);
+  config.addMediaElement(video2);
+
+  actionHandler.setHoverTarget(ctrl1);
+
+  // With hover target set, mark (no click event) must broadcast to ALL or be no-op on target
+  // The spec says mark is excluded from hover activation — it should broadcast (null resolvedTarget)
+  actionHandler.runAction('mark', 0, null);
+
+  // Both videos should receive mark (broadcast, not hover-targeted)
+  assert.equal(video1.vsc.mark, 42, 'video1 mark must be set (broadcast)');
+  assert.equal(video2.vsc.mark, 10, 'video2 mark must be set (broadcast, not suppressed by hover)');
+});
+
+runner.test('ActionHandler jump is a no-op when only hover target is set (no click event)', async () => {
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  const eventManager = new window.VSC.EventManager(config, null);
+  const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+  config.mediaElements.length = 0;
+
+  const ctrl1 = document.createElement('div');
+  const ctrl2 = document.createElement('div');
+
+  const video1 = createMockVideo({ currentTime: 99 });
+  video1.vsc = { div: ctrl1, speedIndicator: { textContent: '1.00' }, mark: 5 };
+
+  const video2 = createMockVideo({ currentTime: 80 });
+  video2.vsc = { div: ctrl2, speedIndicator: { textContent: '1.00' }, mark: 20 };
+
+  config.addMediaElement(video1);
+  config.addMediaElement(video2);
+
+  actionHandler.setHoverTarget(ctrl1);
+
+  // With hover target set, jump (no click) must broadcast — not be limited to hovered video
+  actionHandler.runAction('jump', 0, null);
+
+  // Both videos should jump (broadcast path)
+  assert.equal(video1.currentTime, 5, 'video1 should jump to its mark (broadcast)');
+  assert.equal(video2.currentTime, 20, 'video2 should jump to its mark (broadcast, not suppressed)');
+});
+
+runner.test('ActionHandler click-derived target wins over hover target', async () => {
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  const eventManager = new window.VSC.EventManager(config, null);
+  const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+  config.mediaElements.length = 0;
+
+  // Build two shadow DOMs so getRootNode().host resolves to ctrl2
+  const ctrl1 = document.createElement('div');
+  const ctrl2 = document.createElement('div');
+  document.body.appendChild(ctrl2);
+  const shadow2 = ctrl2.attachShadow({ mode: 'open' });
+  const btn2 = document.createElement('button');
+  shadow2.appendChild(btn2);
+
+  const video1 = createMockVideo({ playbackRate: 1.0 });
+  video1.vsc = { div: ctrl1, speedIndicator: { textContent: '1.00' } };
+
+  const video2 = createMockVideo({ playbackRate: 1.0 });
+  video2.vsc = { div: ctrl2, speedIndicator: { textContent: '1.00' } };
+
+  config.addMediaElement(video1);
+  config.addMediaElement(video2);
+
+  // Hover target is ctrl1, but the click event comes from ctrl2's shadow root
+  actionHandler.setHoverTarget(ctrl1);
+
+  const fakeEvent = { target: btn2 };
+  actionHandler.runAction('faster', 0.1, fakeEvent);
+
+  assert.equal(video2.playbackRate, 1.1, 'click-derived target (ctrl2) must receive the action');
+  assert.equal(video1.playbackRate, 1.0, 'hover target (ctrl1) must be overridden by click target');
+});
+
 export { runner as actionHandlerTestRunner };

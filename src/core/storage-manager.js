@@ -14,12 +14,25 @@ if (!window.VSC.StorageManager) {
     // Listen for injected settings from content script
     static _setupSettingsListener() {
       if (typeof window !== 'undefined' && !this._listenerSetup) {
-        window.addEventListener('VSC_USER_SETTINGS', (event) => {
+        this._settingsListener = (event) => {
           window.VSC.logger.debug('Received user settings from content script');
           this._injectedSettings = event.detail;
-        });
+        };
+        window.addEventListener('VSC_USER_SETTINGS', this._settingsListener);
         this._listenerSetup = true;
       }
+    }
+
+    // Remove the VSC_USER_SETTINGS listener — called by tests to prevent stale
+    // listeners from persisting across test cases in a shared JSDOM environment.
+    // Also resets _injectedSettings to null so each test starts from a clean slate.
+    static _teardownSettingsListener() {
+      if (this._settingsListener) {
+        window.removeEventListener('VSC_USER_SETTINGS', this._settingsListener);
+        this._settingsListener = null;
+      }
+      this._listenerSetup = false;
+      this._injectedSettings = null;
     }
     /**
      * Get settings from Chrome storage
@@ -60,6 +73,17 @@ if (!window.VSC.StorageManager) {
     static async waitForInjectedSettings(defaults = {}) {
       this._setupSettingsListener();
 
+      // Check the window property set by injector.js before dispatching the event.
+      // This recovers settings even when the VSC_USER_SETTINGS event fired before
+      // the listener was registered (race condition fix — Option A).
+      if (window.__VSC_injectedSettings) {
+        this._injectedSettings = window.__VSC_injectedSettings;
+        delete window.__VSC_injectedSettings;
+        const merged = { ...defaults, ...this._injectedSettings };
+        window.VSC.logger.debug('Using injected settings from window property');
+        return Promise.resolve(merged);
+      }
+
       if (this._injectedSettings) {
         const merged = { ...defaults, ...this._injectedSettings };
         window.VSC.logger.debug('Using available injected settings');
@@ -75,6 +99,12 @@ if (!window.VSC.StorageManager) {
         }, 5000);
 
         const checkSettings = () => {
+          // Also check window.__VSC_injectedSettings in the poll loop in case
+          // injector.js sets it after waitForInjectedSettings() was first called.
+          if (window.__VSC_injectedSettings && !this._injectedSettings) {
+            this._injectedSettings = window.__VSC_injectedSettings;
+            delete window.__VSC_injectedSettings;
+          }
           if (this._injectedSettings) {
             clearTimeout(deadline);
             const merged = { ...defaults, ...this._injectedSettings };

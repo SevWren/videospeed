@@ -45,7 +45,9 @@ function makeFakeTimers() {
       const toFire = pendingTimers.filter((t) => t.ms >= minMs).slice();
       toFire.forEach((t) => {
         const idx = pendingTimers.findIndex((p) => p.id === t.id);
-        if (idx !== -1) pendingTimers.splice(idx, 1);
+        if (idx !== -1) {
+          pendingTimers.splice(idx, 1);
+        }
         t.fn();
       });
     },

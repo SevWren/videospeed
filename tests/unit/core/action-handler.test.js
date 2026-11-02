@@ -620,4 +620,162 @@ runner.test('ActionHandler pause resumes a paused video (line 427)', async () =>
   assert.false(mockVideo.paused, 'paused video must be resumed by pause action');
 });
 
+// ---------------------------------------------------------------------------
+// T2 — ActionHandler hover targeting tests
+// ---------------------------------------------------------------------------
+
+runner.test('ActionHandler _hoverTargetController starts as null', async () => {
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  const eventManager = new window.VSC.EventManager(config, null);
+  const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+  assert.equal(actionHandler._hoverTargetController, null,
+    '_hoverTargetController must be null on construction');
+});
+
+runner.test('ActionHandler setHoverTarget sets _hoverTargetController', async () => {
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  const eventManager = new window.VSC.EventManager(config, null);
+  const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+  const fakeDiv = document.createElement('div');
+  actionHandler.setHoverTarget(fakeDiv);
+
+  assert.equal(actionHandler._hoverTargetController, fakeDiv,
+    'setHoverTarget must store the passed div in _hoverTargetController');
+});
+
+runner.test('ActionHandler hover target narrows action to hovered video only', async () => {
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  const eventManager = new window.VSC.EventManager(config, null);
+  const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+  config.mediaElements.length = 0;
+
+  const ctrl1 = document.createElement('div');
+  const ctrl2 = document.createElement('div');
+
+  const video1 = createMockVideo({ playbackRate: 1.0 });
+  video1.vsc = { div: ctrl1, speedIndicator: { textContent: '1.00' } };
+
+  const video2 = createMockVideo({ playbackRate: 1.0 });
+  video2.vsc = { div: ctrl2, speedIndicator: { textContent: '1.00' } };
+
+  config.addMediaElement(video1);
+  config.addMediaElement(video2);
+
+  actionHandler.setHoverTarget(ctrl1);
+
+  // Keyboard-triggered call: no event object
+  actionHandler.runAction('faster', 0.1, null);
+
+  assert.equal(video1.playbackRate, 1.1, 'hovered video should receive the action');
+  assert.equal(video2.playbackRate, 1.0, 'non-hovered video must not receive the action');
+});
+
+runner.test('ActionHandler mark is a no-op when only hover target is set (no click event)', async () => {
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  const eventManager = new window.VSC.EventManager(config, null);
+  const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+  config.mediaElements.length = 0;
+
+  const ctrl1 = document.createElement('div');
+  const ctrl2 = document.createElement('div');
+
+  const video1 = createMockVideo({ currentTime: 42 });
+  video1.vsc = { div: ctrl1, speedIndicator: { textContent: '1.00' } };
+
+  const video2 = createMockVideo({ currentTime: 10 });
+  video2.vsc = { div: ctrl2, speedIndicator: { textContent: '1.00' } };
+
+  config.addMediaElement(video1);
+  config.addMediaElement(video2);
+
+  actionHandler.setHoverTarget(ctrl1);
+
+  // With hover target set, mark (no click event) must broadcast to ALL or be no-op on target
+  // The spec says mark is excluded from hover activation — it should broadcast (null resolvedTarget)
+  actionHandler.runAction('mark', 0, null);
+
+  // Both videos should receive mark (broadcast, not hover-targeted)
+  assert.equal(video1.vsc.mark, 42, 'video1 mark must be set (broadcast)');
+  assert.equal(video2.vsc.mark, 10, 'video2 mark must be set (broadcast, not suppressed by hover)');
+});
+
+runner.test('ActionHandler jump is a no-op when only hover target is set (no click event)', async () => {
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  const eventManager = new window.VSC.EventManager(config, null);
+  const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+  config.mediaElements.length = 0;
+
+  const ctrl1 = document.createElement('div');
+  const ctrl2 = document.createElement('div');
+
+  const video1 = createMockVideo({ currentTime: 99 });
+  video1.vsc = { div: ctrl1, speedIndicator: { textContent: '1.00' }, mark: 5 };
+
+  const video2 = createMockVideo({ currentTime: 80 });
+  video2.vsc = { div: ctrl2, speedIndicator: { textContent: '1.00' }, mark: 20 };
+
+  config.addMediaElement(video1);
+  config.addMediaElement(video2);
+
+  actionHandler.setHoverTarget(ctrl1);
+
+  // With hover target set, jump (no click) must broadcast — not be limited to hovered video
+  actionHandler.runAction('jump', 0, null);
+
+  // Both videos should jump (broadcast path)
+  assert.equal(video1.currentTime, 5, 'video1 should jump to its mark (broadcast)');
+  assert.equal(video2.currentTime, 20, 'video2 should jump to its mark (broadcast, not suppressed)');
+});
+
+runner.test('ActionHandler click-derived target wins over hover target', async () => {
+  const config = window.VSC.videoSpeedConfig;
+  await config.load();
+
+  const eventManager = new window.VSC.EventManager(config, null);
+  const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+  config.mediaElements.length = 0;
+
+  // Build two shadow DOMs so getRootNode().host resolves to ctrl2
+  const ctrl1 = document.createElement('div');
+  const ctrl2 = document.createElement('div');
+  document.body.appendChild(ctrl2);
+  const shadow2 = ctrl2.attachShadow({ mode: 'open' });
+  const btn2 = document.createElement('button');
+  shadow2.appendChild(btn2);
+
+  const video1 = createMockVideo({ playbackRate: 1.0 });
+  video1.vsc = { div: ctrl1, speedIndicator: { textContent: '1.00' } };
+
+  const video2 = createMockVideo({ playbackRate: 1.0 });
+  video2.vsc = { div: ctrl2, speedIndicator: { textContent: '1.00' } };
+
+  config.addMediaElement(video1);
+  config.addMediaElement(video2);
+
+  // Hover target is ctrl1, but the click event comes from ctrl2's shadow root
+  actionHandler.setHoverTarget(ctrl1);
+
+  const fakeEvent = { target: btn2 };
+  actionHandler.runAction('faster', 0.1, fakeEvent);
+
+  assert.equal(video2.playbackRate, 1.1, 'click-derived target (ctrl2) must receive the action');
+  assert.equal(video1.playbackRate, 1.0, 'hover target (ctrl1) must be overridden by click target');
+});
+
 export { runner as actionHandlerTestRunner };

@@ -271,24 +271,21 @@ async function initBridge() {
   setupMessageBridge();
 }
 
+// ADR-0005 fix: call initBridge() without requestIdleCallback deferral.
+//
+// requestIdleCallback with a timeout fires its callback synchronously only when
+// the timeout expires — but if a long-running task (e.g. YouTube's 4000+ ms
+// setTimeout handlers) owns the thread at that moment, the idle callback is
+// queued behind it. StorageManager.waitForInjectedSettings() starts its 5000ms
+// deadline the instant inject.js runs; if injectUserSettings() arrives after
+// that deadline the user's settings are silently discarded (regression observed
+// in www.youtube.com-1793580955578.log line 23551).
+//
+// Direct call guarantees injectUserSettings() fires within milliseconds of
+// document_end on every load, well inside the 5000ms window.
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
-    if (window.requestIdleCallback) {
-      requestIdleCallback(initBridge, { timeout: 3000 });
-    } else {
-      setTimeout(initBridge, 100);
-    }
-  });
-} else if (document.readyState === 'interactive') {
-  if (window.requestIdleCallback) {
-    requestIdleCallback(initBridge, { timeout: 2000 });
-  } else {
-    setTimeout(initBridge, 50);
-  }
+  document.addEventListener('DOMContentLoaded', initBridge);
 } else {
-  if (window.requestIdleCallback) {
-    requestIdleCallback(initBridge, { timeout: 1000 });
-  } else {
-    setTimeout(initBridge, 10);
-  }
+  // document is 'interactive' or 'complete' — call immediately
+  initBridge();
 }

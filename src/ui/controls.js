@@ -17,24 +17,69 @@ class ControlsManager {
    * @param {HTMLVideoElement} video - Associated video element
    */
   setupControlEvents(shadow, video, onSpeedChange = null) {
-    this.setupDragHandler(shadow);
+    this.setupDragHandler(shadow, video);
     this.setupButtonHandlers(shadow);
     this.setupWheelHandler(shadow, video, onSpeedChange);
     this.setupClickPrevention(shadow);
   }
 
   /**
-   * Set up drag handler for speed indicator
+   * Set up drag handler for speed indicator.
+   * DragHandler (src/ui/drag-handler.js) had one call site and one adapter —
+   * a hypothetical seam per codebase-design deletion test. Logic inlined here.
    * @param {ShadowRoot} shadow - Shadow root
+   * @param {HTMLVideoElement|HTMLCanvasElement} video - Media element whose vsc.div is the controller
    * @private
    */
-  setupDragHandler(shadow) {
+  setupDragHandler(shadow, video) {
     const draggable = shadow.querySelector('.draggable');
 
     draggable.addEventListener(
       'mousedown',
       (e) => {
-        this.actionHandler.runAction(e.target.dataset['action'], false, e);
+        const controller = video.vsc.div;
+        const shadowController = controller.shadowRoot?.querySelector('#controller');
+        if (!shadowController) {
+          e.stopPropagation();
+          e.preventDefault();
+          return;
+        }
+
+        // Find nearest parent of same size as video parent
+        const parentElement = window.VSC.DomUtils.findVideoParent(controller);
+
+        video.classList.add('vcs-dragging');
+        shadowController.classList.add('dragging');
+
+        const initialMouseXY = [e.clientX, e.clientY];
+        const initialControllerXY = [
+          parseInt(shadowController.style.left) || 0,
+          parseInt(shadowController.style.top) || 0,
+        ];
+
+        const startDragging = (moveEvent) => {
+          const style = shadowController.style;
+          const dx = moveEvent.clientX - initialMouseXY[0];
+          const dy = moveEvent.clientY - initialMouseXY[1];
+          style.left = `${initialControllerXY[0] + dx}px`;
+          style.top = `${initialControllerXY[1] + dy}px`;
+        };
+
+        const stopDragging = () => {
+          parentElement.removeEventListener('mousemove', startDragging);
+          parentElement.removeEventListener('mouseup', stopDragging);
+          parentElement.removeEventListener('mouseleave', stopDragging);
+          shadowController.classList.remove('dragging');
+          video.classList.remove('vcs-dragging');
+          window.VSC.logger.debug('Drag operation completed');
+        };
+
+        parentElement.addEventListener('mouseup', stopDragging);
+        parentElement.addEventListener('mouseleave', stopDragging);
+        parentElement.addEventListener('mousemove', startDragging);
+
+        window.VSC.logger.debug('Drag operation started');
+
         e.stopPropagation();
         e.preventDefault();
       },
@@ -83,6 +128,10 @@ class ControlsManager {
   setupWheelHandler(shadow, video, onSpeedChange) {
     const controller = shadow.querySelector('#controller');
 
+    // { passive: false } is required because this handler calls event.preventDefault()
+    // to prevent page scrolling when the user wheels over the controller.
+    // This generates a Chrome [Violation] warning. The path to removing it is documented
+    // in docs/coverage/untestable.md: replace preventDefault() with CSS touch-action:none.
     controller.addEventListener(
       'wheel',
       (event) => {

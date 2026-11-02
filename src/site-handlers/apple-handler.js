@@ -15,15 +15,14 @@ class AppleHandler extends window.VSC.BaseSiteHandler {
   }
 
   /**
-   * Get Apple TV+-specific controller positioning
+   * Get Apple TV+-specific controller positioning.
+   * gifMode/CANVAS guard is handled by BaseSiteHandler.getControllerPosition().
    * @param {HTMLElement} parent - Parent element
-   * @param {HTMLElement} video - Video element
+   * @param {HTMLElement} _video - Video element (guaranteed non-canvas, non-gif)
+   * @param {Object} _options - Options
    * @returns {Object} Positioning information
    */
-  getControllerPosition(parent, video, options = {}) {
-    if (options.gifMode) {
-      return super.getControllerPosition(parent, video);
-    }
+  _getVideoControllerPosition(parent, _video, _options) {
     // Insert before parent to bypass overlay
     return {
       insertionPoint: parent.parentNode,

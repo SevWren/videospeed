@@ -20,23 +20,22 @@ class AmazonHandler extends window.VSC.BaseSiteHandler {
   }
 
   /**
-   * Get Amazon-specific controller positioning
+   * Get Amazon-specific controller positioning.
+   * gifMode/CANVAS guard is handled by BaseSiteHandler.getControllerPosition().
    * @param {HTMLElement} parent - Parent element
-   * @param {HTMLElement} video - Video element
+   * @param {HTMLElement} video - Video element (guaranteed non-canvas, non-gif)
+   * @param {Object} _options - Options
    * @returns {Object} Positioning information
    */
-  getControllerPosition(parent, video, options = {}) {
-    if (options.gifMode || (video && video.tagName === 'CANVAS')) {
-      return super.getControllerPosition(parent, video);
-    }
+  _getVideoControllerPosition(parent, video, _options) {
     if (!video.classList.contains('vjs-tech')) {
       const insertionPoint = parent.parentElement;
       if (!insertionPoint || insertionPoint === document.documentElement) {
-        return super.getControllerPosition(parent, video);
+        return super._getVideoControllerPosition(parent, video, _options);
       }
       return { insertionPoint, insertionMethod: 'beforeParent', targetParent: insertionPoint };
     }
-    return super.getControllerPosition(parent, video);
+    return super._getVideoControllerPosition(parent, video, _options);
   }
 
   /**

@@ -19,15 +19,43 @@ class BaseSiteHandler {
   }
 
   /**
-   * Get the site-specific positioning for the controller
+   * Get the site-specific positioning for the controller.
+   *
+   * Canonical gifMode/CANVAS guard: GIF canvases always use the generic
+   * firstChild positioning regardless of site-specific overrides. This guard
+   * is the single authoritative place for that short-circuit — subclasses
+   * must NOT duplicate it.
+   *
    * @param {HTMLElement} parent - Parent element
-   * @param {HTMLElement} video - Video element
+   * @param {HTMLElement} video - Video or canvas element
+   * @param {Object} options - Options including gifMode flag
    * @returns {Object} Positioning information
    */
-  getControllerPosition(parent, _video, _options = {}) {
+  getControllerPosition(parent, video, options = {}) {
+    if (options.gifMode || (video && video.tagName === 'CANVAS')) {
+      return {
+        insertionPoint: parent,
+        insertionMethod: 'firstChild',
+        targetParent: parent,
+      };
+    }
+    return this._getVideoControllerPosition(parent, video, options);
+  }
+
+  /**
+   * Site-specific positioning hook. Override in subclasses instead of
+   * getControllerPosition(). The gifMode/CANVAS guard has already been
+   * applied before this is called.
+   *
+   * @param {HTMLElement} parent - Parent element
+   * @param {HTMLElement} video - Video element (guaranteed non-canvas, non-gif)
+   * @param {Object} options - Options
+   * @returns {Object} Positioning information
+   */
+  _getVideoControllerPosition(parent, _video, _options) {
     return {
       insertionPoint: parent,
-      insertionMethod: 'firstChild', // 'firstChild', 'beforeParent', 'afterParent'
+      insertionMethod: 'firstChild',
       targetParent: parent,
     };
   }

@@ -113,8 +113,10 @@ runner.test('NetflixHandler.handleSeek posts message with correct seekMs', () =>
   assert.equal(posted[0].msg.seekMs, 3000);
 });
 
-runner.test('NetflixHandler.handleSeek falls back to currentTime when postMessage throws', () => {
-  // RED: before fallback path, exceptions propagated uncaught.
+runner.test('NetflixHandler.handleSeek does NOT fall back to currentTime when postMessage throws (ADR-0004)', () => {
+  // RED evidence: before Change 4, the catch block set video.currentTime += seekSeconds,
+  // which is the exact mechanism ADR-0004 documents as broken on Netflix.
+  // After Change 4, the catch block logs a warning and does NOT mutate currentTime.
   const video = document.createElement('video');
   Object.defineProperty(video, 'currentTime', { value: 10, writable: true, configurable: true });
 
@@ -122,13 +124,12 @@ runner.test('NetflixHandler.handleSeek falls back to currentTime when postMessag
   window.postMessage = () => { throw new Error('blocked'); };
 
   const handler = new window.VSC.NetflixHandler();
-  const result = handler.handleSeek(video, 5);
+  handler.handleSeek(video, 5);
 
   window.postMessage = origPostMessage;
 
-  // Falls back: currentTime += seekSeconds
-  assert.equal(result, true);
-  assert.equal(video.currentTime, 15);
+  // currentTime must NOT have been mutated — the broken fallback is removed
+  assert.equal(video.currentTime, 10);
 });
 
 // --- initialize() ---

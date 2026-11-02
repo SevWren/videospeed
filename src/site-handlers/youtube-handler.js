@@ -15,15 +15,14 @@ class YouTubeHandler extends window.VSC.BaseSiteHandler {
   }
 
   /**
-   * Get YouTube-specific controller positioning
+   * Get YouTube-specific controller positioning.
+   * gifMode/CANVAS guard is handled by BaseSiteHandler.getControllerPosition().
    * @param {HTMLElement} parent - Parent element
-   * @param {HTMLElement} video - Video element
+   * @param {HTMLElement} video - Video element (guaranteed non-canvas, non-gif)
+   * @param {Object} options - Options
    * @returns {Object} Positioning information
    */
-  getControllerPosition(parent, video, options = {}) {
-    if (options.gifMode) {
-      return super.getControllerPosition(parent, video);
-    }
+  _getVideoControllerPosition(parent, _video, _options) {
     // YouTube requires special positioning to ensure controller is on top
     const targetParent = parent.parentElement;
 

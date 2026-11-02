@@ -15,15 +15,14 @@ class NetflixHandler extends window.VSC.BaseSiteHandler {
   }
 
   /**
-   * Get Netflix-specific controller positioning
+   * Get Netflix-specific controller positioning.
+   * gifMode/CANVAS guard is handled by BaseSiteHandler.getControllerPosition().
    * @param {HTMLElement} parent - Parent element
-   * @param {HTMLElement} video - Video element
+   * @param {HTMLElement} _video - Video element (guaranteed non-canvas, non-gif)
+   * @param {Object} _options - Options
    * @returns {Object} Positioning information
    */
-  getControllerPosition(parent, video, options = {}) {
-    if (options.gifMode || (video && video.tagName === 'CANVAS')) {
-      return super.getControllerPosition(parent, video);
-    }
+  _getVideoControllerPosition(parent, _video, _options) {
     // Insert before parent to bypass Netflix's overlay
     return {
       insertionPoint: parent.parentElement,
@@ -52,10 +51,11 @@ class NetflixHandler extends window.VSC.BaseSiteHandler {
       window.VSC.logger.debug(`Netflix seek: ${seekSeconds} seconds`);
       return true;
     } catch (error) {
-      window.VSC.logger.error(`Netflix seek failed: ${error.message}`);
-      // Fallback to default seeking
-      video.currentTime += seekSeconds;
-      return true;
+      // ADR-0004: direct video.currentTime writes are intercepted and ignored by Netflix's
+      // player. The postMessage path is the ONLY working seek mechanism on Netflix.
+      // Falling back to currentTime silently fails — do NOT do it.
+      window.VSC.logger.warn(`Netflix seek via postMessage failed — seek not applied. Error: ${error.message}`);
+      return false;
     }
   }
 

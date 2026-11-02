@@ -15,15 +15,14 @@ class FacebookHandler extends window.VSC.BaseSiteHandler {
   }
 
   /**
-   * Get Facebook-specific controller positioning
+   * Get Facebook-specific controller positioning.
+   * gifMode/CANVAS guard is handled by BaseSiteHandler.getControllerPosition().
    * @param {HTMLElement} parent - Parent element
-   * @param {HTMLElement} video - Video element
+   * @param {HTMLElement} _video - Video element (guaranteed non-canvas, non-gif)
+   * @param {Object} _options - Options
    * @returns {Object} Positioning information
    */
-  getControllerPosition(parent, video, options = {}) {
-    if (options.gifMode || (video && video.tagName === 'CANVAS')) {
-      return super.getControllerPosition(parent, video);
-    }
+  _getVideoControllerPosition(parent, _video, _options) {
     // Facebook requires deep DOM traversal due to complex nesting
     // This is a monstrosity but new FB design does not have semantic handles
     let targetParent = parent;

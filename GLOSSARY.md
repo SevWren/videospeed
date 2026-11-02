@@ -10,6 +10,7 @@ A Chrome WebExtension that attaches playback controls to every HTML media elemen
 A discrete operation dispatched to one or more media elements. The user-facing set: `faster`, `slower`, `reset`, `fast`, `rewind`, `advance`, `pause`, `muted`, `louder`, `softer`, `mark`, `jump`, `display`, `blink`, `drag`. The internal message-driven set (dispatched via `MESSAGE_TYPES`): `SET_SPEED`, `ADJUST_SPEED`, `RESET_SPEED`. Actions are triggered by key bindings, controller buttons, or popup messages.
 Note: GIF controllers support only a subset of user-facing actions (`faster`, `slower`, `reset`, `fast`, `display`, `pause`, `blink`). The actions `rewind`, `advance`, `muted`, `louder`, `softer`, `mark`, and `jump` are not supported for GIFs because GIFs have no timeline.
 Note: The `blink` action temporarily reveals a hidden controller — it removes `vsc-hidden` for a short duration and then re-hides it. Triggered explicitly or automatically on speed change.
+Note: When a keyboard shortcut fires and a Hover Target is set (but no controller button was clicked), the actions `mark` and `jump` bypass the Hover Target and broadcast to all media elements. All other actions route exclusively to the Hover Target. See ADR-0010.
 _Avoid_: command, event, operation
 
 **Playback Rate**:
@@ -62,7 +63,7 @@ _Avoid_: hidden mode, invisible mode, auto-hide
 ### UI
 
 **Controller**:
-The floating UI element injected into a page and bound to a single media element. The Controller IS the Shadow DOM host: it is a `<div class="vsc-controller">` on which `attachShadow({ mode: 'open' })` is called, making it the outermost DOM element inserted into the page. The visual content (speed indicator, buttons) lives inside the shadow root. Tracked on the element as `video.vsc.div`.
+The floating UI element injected into a page and bound to a single media element. The Controller IS the Shadow DOM host: it is a `<div class="vsc-controller">` on which `attachShadow({ mode: 'open' })` is called, making it the outermost DOM element inserted into the page. The visual content (speed indicator, buttons) lives inside the shadow root. Tracked on the element as `video.vsc.div`. Carries `tabindex="-1"` so it can receive programmatic focus during Conditional Focus Steal.
 Note: The GIF Controller's speed overlay div is also a Controller in this sense — it is an identically-structured Shadow DOM host inserted adjacent to the GIF canvas.
 _Avoid_: widget, overlay, badge, panel
 
@@ -253,6 +254,34 @@ _Avoid_: frame reload, reparse, redecode
 **GIF Speed Debounce**:
 The 500 ms delay (`GIF_SPEED_SAVE_DEBOUNCE_MS`) between the last speed-change action and the actual write to `chrome.storage.sync`. Prevents storage rate-limit errors when the user holds down a speed key binding. Implemented in `ActionHandler._saveGifSpeedDebounced`.
 _Avoid_: speed save delay, debounce timer, persist delay
+
+### Keyboard Targeting
+
+**Hover Target** (`_hoverTargetController`):
+The Controller currently designated as the exclusive keyboard hotkey target, set by Hover Activation and stored as `ActionHandler._hoverTargetController`. When a Hover Target is set, keyboard-triggered Actions route only to the media element whose Controller matches it — except `mark` and `jump`, which always broadcast. Replaced only when another Controller completes Hover Activation (Sticky Hover). See ADR-0008, ADR-0009.
+_Avoid_: active controller, focused controller, selected controller, hover target controller
+
+**Hover Activation**:
+The mechanism by which a pointer `mouseenter` event on a Controller div, after Dwell Time elapses without `mouseleave`, calls `ActionHandler.setHoverTarget()` to set that Controller as the Hover Target. Enabled per media type by `hoverActivatesVideoTarget` (for video/audio) and `hoverActivatesGifTarget` (for GIFs). See ADR-0008.
+_Avoid_: hover focus, hover select, mouse activation
+
+**Sticky Hover**:
+The design property that the Hover Target persists after the pointer leaves a Controller div. `mouseleave` cancels any pending Dwell Time but does not clear the Hover Target; only a new Hover Activation on a different Controller replaces it. See ADR-0009.
+_Avoid_: sticky focus, persistent hover, hover lock
+
+**Dwell Time** (`HOVER_DWELL_MS`):
+The 200 ms delay between a `mouseenter` event on a Controller and the commit of that Controller as the Hover Target. Implemented as a `setTimeout` started on `mouseenter` and cancelled on `mouseleave`. Defined as `window.VSC.Constants.HOVER_DWELL_MS = 200`.
+_Avoid_: hover delay, activation delay, dwell timeout
+
+**Conditional Focus Steal**:
+The act of calling `div.focus({ preventScroll: true })` on the Controller div at Dwell Time commit, performed only when `!document.hasFocus()`. Restores keyboard event delivery to the page when the browser address bar or another non-page surface has focus, without disturbing focus already held within the page.
+_Avoid_: focus grab, focus steal, focus hijack
+
+**hoverActivatesVideoTarget**:
+Persisted boolean setting (default `true`) in `chrome.storage.sync` that enables Hover Activation for video and audio Controllers. When `false`, no `mouseenter`/`mouseleave` listeners are registered on video/audio Controller divs.
+
+**hoverActivatesGifTarget**:
+Persisted boolean setting (default `false`) in `chrome.storage.sync` that enables Hover Activation for GIF Controllers. Opt-in unlike `hoverActivatesVideoTarget`. The check occurs inside the `mouseenter` handler at runtime rather than at listener-registration time, so toggling the setting takes effect without reloading the page.
 
 ### Settings (named storage keys)
 

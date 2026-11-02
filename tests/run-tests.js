@@ -224,6 +224,7 @@ async function runTests() {
     testFiles = [
       'integration/module-integration.test.js',
       'integration/gif-integration.test.js',
+      'integration/hover-activation.test.js',
     ];
   } else {
     // Run all tests
@@ -265,6 +266,7 @@ async function runTests() {
       'unit/utils/logger.test.js',
       'integration/module-integration.test.js',
       'integration/gif-integration.test.js',
+      'integration/hover-activation.test.js',
     ];
   }
 

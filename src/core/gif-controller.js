@@ -46,9 +46,40 @@ if (!window.VSC.GifController) {
       this._origImgCssText = null;
       this._rafRunning = false;
       this._hoverDwellTimer = null;
+      /** @private */
+      this._decoder = null;
     }
 
-    static async create(imgElement, parent, config, actionHandler) {
+    /**
+     * Factory function that creates the production gifuct-js adapter.
+     * Wraps window.__VSC_gifuct behind the GifDecoder port:
+     *   decode(buffer: ArrayBuffer): { frames, width, height, loopCount, bgColor, _parsed }
+     * Tests inject a SyntheticGifDecoder instead of this adapter.
+     */
+    static _createGifuctAdapter() {
+      return {
+        decode(buffer) {
+          const parsed = window.__VSC_gifuct.parseGIF(buffer);
+          const frames = window.__VSC_gifuct.decompressFrames(parsed, true);
+          const bgIdx = parsed.lsd?.backgroundColorIndex;
+          const bgColor =
+            bgIdx !== null && bgIdx !== undefined && parsed.gct && parsed.gct[bgIdx]
+              ? parsed.gct[bgIdx]
+              : null;
+          return {
+            frames,
+            width: parsed.lsd.width,
+            height: parsed.lsd.height,
+            loopCount:
+              parsed.loopCount === null || parsed.loopCount === undefined ? 0 : parsed.loopCount,
+            bgColor,
+            _parsed: parsed,
+          };
+        },
+      };
+    }
+
+    static async create(imgElement, parent, config, actionHandler, gifDecoder) {
       let gc;
       try {
         if (!config.settings.controlGifs) {
@@ -99,6 +130,12 @@ if (!window.VSC.GifController) {
 
         gc = new GifController(imgElement, parent, config, actionHandler);
 
+        // Build the GifDecoder: use the injected adapter (for tests) or the
+        // production gifuct-js adapter (default). Stored on the instance so the
+        // re-decode path in _setupIntersectionObserver uses the same adapter.
+        const decoder = gifDecoder || GifController._createGifuctAdapter();
+        gc._decoder = decoder;
+
         // Fetch GIF bytes
         const arrayBuffer = await GifController._fetchGifBytes(resolvedSrc, origin);
         if (!arrayBuffer) {
@@ -107,26 +144,26 @@ if (!window.VSC.GifController) {
         }
         gc._rawBuffer = arrayBuffer;
 
-        // Parse and decompress frames
-        let parsed, frames;
+        // Decode frames via the GifDecoder port (production: gifuct adapter; test: synthetic).
+        // Port returns: { frames, width, height, loopCount, bgColor, _parsed }
+        let decoded;
         try {
-          parsed = window.__VSC_gifuct.parseGIF(arrayBuffer);
+          decoded = decoder.decode(arrayBuffer);
         } catch (decodeErr) {
           window.VSC.logger.warn(`GIF decode failed for ${src}: ${decodeErr.message}`);
           gc.fetchFailed = true;
           return null;
         }
 
-        gc._gifWidth = parsed.lsd.width;
-        gc._gifHeight = parsed.lsd.height;
+        const { frames } = decoded;
+        gc._gifWidth = decoded.width;
+        gc._gifHeight = decoded.height;
         // loopCount = 0 means infinite (Netscape extension convention).
-        // When the Netscape extension is absent gifuct returns undefined/null;
-        // default to 0 (infinite) to match what every browser does.
-        gc._loopCount =
-          parsed.loopCount === null || parsed.loopCount === undefined ? 0 : parsed.loopCount;
+        // The adapter normalises undefined/null to 0.
+        gc._loopCount = decoded.loopCount;
 
         // E-2: Reject GIFs smaller than GIF_MIN_SIZE_PX in either dimension before
-        // allocating memory.  1×1 tracking-pixel GIFs (e.g. cleardot.gif) are
+        // allocating memory.  1x1 tracking-pixel GIFs (e.g. cleardot.gif) are
         // detected by isGifSrc and pass the unloaded-image size filter in
         // scanForGifs, so this guard is the last line of defence at create() time.
         if (
@@ -140,15 +177,14 @@ if (!window.VSC.GifController) {
         // the composite canvas.  Many GIFs use transparent pixels to mean
         // "show the background", so starting with the right background avoids
         // those areas appearing as transparent-black.
-        const bgIdx = parsed.lsd?.backgroundColorIndex;
-        gc._bgColor =
-          bgIdx !== null && bgIdx !== undefined && parsed.gct && parsed.gct[bgIdx]
-            ? parsed.gct[bgIdx]
-            : null;
+        gc._bgColor = decoded.bgColor !== undefined ? decoded.bgColor : null;
 
-        // Check per-GIF size limit before allocating (need frame count estimate from parsed)
-        // We use parsed.frames.length if available, else defer to after decompressFrames
-        const parsedFrameCount = (parsed.frames && parsed.frames.length) || 1;
+        // Check per-GIF size limit before allocating.
+        // Use decoded frame count if available, else fall back to _parsed.frames.length.
+        const parsedFrameCount =
+          (frames && frames.length) ||
+          (decoded._parsed && decoded._parsed.frames && decoded._parsed.frames.length) ||
+          1;
         const frameBytes = gc._gifWidth * gc._gifHeight * 4 * parsedFrameCount;
         if (frameBytes > window.VSC.Constants.GIF_FRAME_CACHE_LIMIT_BYTES) {
           window.VSC.logger.info(
@@ -163,29 +199,18 @@ if (!window.VSC.GifController) {
         }
         gc._allocatedBytes = frameBytes;
 
-        try {
-          frames = window.__VSC_gifuct.decompressFrames(parsed, true);
-        } catch (decodeErr) {
-          window.VSC.logger.warn(`GIF decompressFrames failed for ${src}: ${decodeErr.message}`);
-          // Release pre-allocation
-          window.VSC.GifFrameCache.releaseAllocation(frameBytes);
-          gc._allocatedBytes = 0;
-          gc.fetchFailed = true;
-          return null;
-        }
-
         if (!frames || frames.length <= 1) {
-          // Non-animated GIF (0 or 1 frame) — nothing to speed up, don't replace.
-          // Single-frame GIFs include 1×1 tracking pixels that passed the pre-decode
+          // Non-animated GIF (0 or 1 frame) -- nothing to speed up, don't replace.
+          // Single-frame GIFs include 1x1 tracking pixels that passed the pre-decode
           // size filter because they were unloaded (naturalWidth=0) at scan time.
-          // E-1: fix for Bug B — extends the original `=== 0` guard to cover
+          // E-1: fix for Bug B -- extends the original `=== 0` guard to cover
           // single-frame static GIFs (frames.length === 1).
           window.VSC.GifFrameCache.releaseAllocation(frameBytes);
           gc._allocatedBytes = 0;
           return null;
         }
 
-        gc._parsed = parsed;
+        gc._parsed = decoded._parsed || null;
         gc._frames = frames;
 
         // Capture computed styles BEFORE any DOM mutation
@@ -371,7 +396,7 @@ if (!window.VSC.GifController) {
             window.VSC.GifFrameCache?.releaseAllocation(b);
           }
         } catch (_) {
-          // Silently swallow — allocation state already reset above
+          // Silently swallow -- allocation state already reset above
         }
         return null;
       }
@@ -391,7 +416,7 @@ if (!window.VSC.GifController) {
           return bytes.buffer;
         }
 
-        // Local file:// URLs — injected page scripts run in the null origin of a
+        // Local file:// URLs -- injected page scripts run in the null origin of a
         // file:// page and cannot XHR other file:// resources directly.  Route the
         // request through the content script bridge (injector.js), which runs in the
         // extension's isolated world and CAN access file:// resources when the user
@@ -414,11 +439,11 @@ if (!window.VSC.GifController) {
                 } else {
                   if (event.data.error === 'blocked') {
                     window.VSC.logger.warn(
-                      `Local GIF blocked — enable "Allow access to file URLs" in chrome://extensions/ to use GIF speed control on local files (${src})`
+                      `Local GIF blocked -- enable "Allow access to file URLs" in chrome://extensions/ to use GIF speed control on local files (${src})`
                     );
                   } else if (event.data.error === 'timeout') {
                     window.VSC.logger.debug(
-                      `Local GIF fetch timed out after 8 s — file may be on a slow or disconnected drive (${src})`
+                      `Local GIF fetch timed out after 8 s -- file may be on a slow or disconnected drive (${src})`
                     );
                   }
                   resolve(null);
@@ -530,7 +555,7 @@ if (!window.VSC.GifController) {
       // Draw sub-image via an offscreen patch canvas so source-over compositing is
       // used. putImageData() writes raw RGBA bytes and ignores globalCompositeOperation,
       // meaning transparent pixels in the patch (alpha=0, "show previous layer") would
-      // erase the underlying composite pixels — producing black artifacts wherever a
+      // erase the underlying composite pixels -- producing black artifacts wherever a
       // partial GIF frame is transparent. Drawing through a temp canvas with drawImage()
       // uses source-over, leaving underlying pixels intact where the patch is transparent.
       if (!this._patchCanvas) {
@@ -703,7 +728,7 @@ if (!window.VSC.GifController) {
             clearTimeout(this._hoverDwellTimer);
             this._hoverDwellTimer = null;
           }
-          // Intentionally NOT clearing setHoverTarget — sticky hover
+          // Intentionally NOT clearing setHoverTarget -- sticky hover
         });
       } catch (err) {
         window.VSC.logger.error(`GifController._initializeControls failed: ${err.message}`);
@@ -739,19 +764,20 @@ if (!window.VSC.GifController) {
                 }
                 if (this._visibilityPaused) {
                   this._visibilityPaused = false;
-                  // Re-decode if frames were evicted
+                  // Re-decode if frames were evicted -- uses the stored GifDecoder adapter
+                  // (this._decoder) so the seam is clean and testable without gifuct.
                   if (!this._frames && this._rawBuffer) {
                     try {
-                      const parsed = window.__VSC_gifuct.parseGIF(this._rawBuffer);
-                      const frames = window.__VSC_gifuct.decompressFrames(parsed, true);
-                      if (frames && frames.length > 0) {
-                        const bytes = this._gifWidth * this._gifHeight * 4 * frames.length;
+                      const reDecoded = this._decoder.decode(this._rawBuffer);
+                      const reFrames = reDecoded.frames;
+                      if (reFrames && reFrames.length > 0) {
+                        const bytes = this._gifWidth * this._gifHeight * 4 * reFrames.length;
                         if (bytes > window.VSC.Constants.GIF_FRAME_CACHE_LIMIT_BYTES) {
                           // GIF too large to re-cache
                         } else if (window.VSC.GifFrameCache.tryAllocate(bytes)) {
                           this._allocatedBytes = bytes;
-                          this._frames = frames;
-                          this._parsed = parsed;
+                          this._frames = reFrames;
+                          this._parsed = reDecoded._parsed || null;
                           this._frameIdx = 0;
                           this._framesDrawn = 0;
                           this._savedPixels = null;
@@ -781,7 +807,7 @@ if (!window.VSC.GifController) {
         );
         this._intersectionObserver.observe(this._canvas);
       } catch (_ioErr) {
-        // IntersectionObserver not supported — GIF plays without memory eviction
+        // IntersectionObserver not supported -- GIF plays without memory eviction
       }
     }
 
@@ -803,7 +829,7 @@ if (!window.VSC.GifController) {
           this._targetObserver.observe(this._img, { attributes: true, attributeFilter: ['src'] });
         }
       } catch (_moErr) {
-        // MutationObserver setup failed — src changes won't trigger teardown
+        // MutationObserver setup failed -- src changes won't trigger teardown
       }
     }
 

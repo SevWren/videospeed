@@ -8,6 +8,7 @@ window.VSC = window.VSC || {};
 
 if (!window.VSC.GifFrameCache) {
   window.VSC.GifFrameCache = {
+    /** @private Total bytes currently allocated across all active GIF controllers. */
     _allocated: 0,
     tryAllocate(bytes) {
       if (this._allocated + bytes > window.VSC.Constants.GIF_GLOBAL_MEMORY_BUDGET_BYTES) {
@@ -16,9 +17,19 @@ if (!window.VSC.GifFrameCache) {
       this._allocated += bytes;
       return true;
     },
+    /**
+     * Alias for tryAllocate — retained for call-site compatibility.
+     * Vestigial: both names call the same atomic allocation path.
+     * Prefer tryAllocate for new call sites.
+     */
     requestAllocation(bytes) {
       return this.tryAllocate(bytes);
     },
+    /**
+     * no-op: pre-flight only.
+     * Vestigial stub from a prior two-phase allocation design that was collapsed
+     * to the single atomic tryAllocate call. Kept for call-site compatibility.
+     */
     confirmAllocation(_bytes) {
       // no-op: allocation is now handled atomically by tryAllocate
     },

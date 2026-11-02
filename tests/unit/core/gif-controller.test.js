@@ -299,6 +299,10 @@ function buildInstance(opts = {}) {
   gc._patchCanvas = patchCanvas;
   gc._patchCtx = makeFakeCtx();
 
+  // Wire the default GifDecoder adapter so _setupIntersectionObserver re-decode
+  // path works in tests that invoke it directly on a buildInstance() controller.
+  gc._decoder = window.VSC.GifController._createGifuctAdapter();
+
   // Allocate memory budget so release in remove() works.
   const bytes = W * H * 4 * gc._frames.length;
   window.VSC.GifFrameCache.tryAllocate(bytes);
@@ -2414,6 +2418,256 @@ runner.test('T4: div.focus() NOT called when document.hasFocus() is true', () =>
     throw err;
   }
   teardownHover({ gc, img });
+});
+
+// ─── Change 1: GifDecoder adapter port ────────────────────────────────────────
+// The GifDecoder port replaces the direct window.__VSC_gifuct global coupling.
+// GifController.create() accepts an optional 5th argument: a decoder object
+// conforming to the port: { decode(buffer): { frames, width, height, loopCount, bgColor } }
+// When omitted, a default gifuct adapter is used.
+
+/**
+ * SyntheticGifDecoder — a test adapter that returns known frames without
+ * requiring real GIF data or window.__VSC_gifuct.
+ */
+function makeSyntheticDecoder(opts = {}) {
+  const W = opts.width || 50;
+  const H = opts.height || 50;
+  const frames = opts.frames || [
+    {
+      patch: new Uint8ClampedArray(W * H * 4).fill(100),
+      dims: { left: 0, top: 0, width: W, height: H },
+      delay: 100,
+      disposalType: 1,
+    },
+    {
+      patch: new Uint8ClampedArray(W * H * 4).fill(200),
+      dims: { left: 0, top: 0, width: W, height: H },
+      delay: 200,
+      disposalType: 2,
+    },
+  ];
+  return {
+    decode(_buffer) {
+      if (opts.shouldThrow) { throw new Error(opts.throwMessage || 'SyntheticDecoder error'); }
+      return {
+        frames,
+        width: W,
+        height: H,
+        loopCount: opts.loopCount !== undefined ? opts.loopCount : 0,
+        bgColor: opts.bgColor !== undefined ? opts.bgColor : null,
+      };
+    },
+  };
+}
+
+runner.test('GifDecoder port: create() accepts a SyntheticGifDecoder as 5th argument', async () => {
+  // Verifies that the adapter injection seam exists on create().
+  // We can confirm this structurally by checking that create() does NOT call
+  // window.__VSC_gifuct when a decoder is injected.
+  const img = document.createElement('img');
+  img.src = 'https://example.com/adapter-test.gif';
+  document.body.appendChild(img);
+
+  const config = {
+    settings: {
+      controlGifs: true, lastGifSpeed: 1.0, startHidden: false,
+      controllerOpacity: 0.3, controllerButtonSize: 14,
+    },
+    addGifElement: () => {},
+    removeGifElement: () => {},
+    getGifElements: () => [],
+  };
+
+  // Track whether window.__VSC_gifuct is called.
+  let gifuctCalled = false;
+  const origGifuct = window.__VSC_gifuct;
+  window.__VSC_gifuct = new Proxy(origGifuct, {
+    get(target, prop) {
+      gifuctCalled = true;
+      return target[prop];
+    },
+  });
+
+  const origFetch = global.fetch;
+  global.fetch = async () => ({
+    ok: true,
+    headers: { get: () => 'image/gif' },
+    arrayBuffer: async () => new ArrayBuffer(16),
+  });
+  if (window.VSC.gifFetchFailCache) { window.VSC.gifFetchFailCache.clear(); }
+  const origError = window.VSC.logger.error.bind(window.VSC.logger);
+  window.VSC.logger.error = () => {};
+
+  const syntheticDecoder = makeSyntheticDecoder({ width: 50, height: 50 });
+  let gc;
+  try {
+    gc = await window.VSC.GifController.create(img, null, config, null, syntheticDecoder);
+  } finally {
+    window.__VSC_gifuct = origGifuct;
+    global.fetch = origFetch;
+    window.VSC.logger.error = origError;
+    if (gc) { try { gc.remove(); } catch (_) {} }
+    if (img.parentNode) img.parentNode.removeChild(img);
+    document.querySelectorAll('.vsc-controller').forEach((d) => { if (d.parentNode) d.parentNode.removeChild(d); });
+    document.querySelectorAll('canvas').forEach((c) => { if (c.parentNode) c.parentNode.removeChild(c); });
+  }
+
+  // The SyntheticGifDecoder must have been used — gifuct must NOT have been called.
+  if (gifuctCalled) {
+    throw new Error(
+      'window.__VSC_gifuct was accessed despite injecting a SyntheticGifDecoder — adapter injection not wired'
+    );
+  }
+});
+
+runner.test('GifDecoder port: default adapter calls window.__VSC_gifuct (structural source test)', async () => {
+  // Verifies the real (production) adapter wraps window.__VSC_gifuct.
+  // When no decoder is passed, create() must access window.__VSC_gifuct.
+  const img = document.createElement('img');
+  img.src = 'https://example.com/default-adapter-test.gif';
+  document.body.appendChild(img);
+
+  const config = {
+    settings: {
+      controlGifs: true, lastGifSpeed: 1.0, startHidden: false,
+      controllerOpacity: 0.3, controllerButtonSize: 14,
+    },
+    addGifElement: () => {},
+    removeGifElement: () => {},
+    getGifElements: () => [],
+  };
+
+  let gifuctCalled = false;
+  const origGifuct = window.__VSC_gifuct;
+  window.__VSC_gifuct = {
+    parseGIF: (...args) => { gifuctCalled = true; return origGifuct.parseGIF(...args); },
+    decompressFrames: (...args) => origGifuct.decompressFrames(...args),
+  };
+
+  const origFetch = global.fetch;
+  global.fetch = async () => ({
+    ok: true,
+    headers: { get: () => 'image/gif' },
+    arrayBuffer: async () => new ArrayBuffer(16),
+  });
+  if (window.VSC.gifFetchFailCache) { window.VSC.gifFetchFailCache.clear(); }
+  const origError = window.VSC.logger.error.bind(window.VSC.logger);
+  window.VSC.logger.error = () => {};
+
+  let gc;
+  try {
+    // No decoder argument — should use the default gifuct adapter.
+    gc = await window.VSC.GifController.create(img, null, config, null);
+  } finally {
+    window.__VSC_gifuct = origGifuct;
+    global.fetch = origFetch;
+    window.VSC.logger.error = origError;
+    if (gc) { try { gc.remove(); } catch (_) {} }
+    if (img.parentNode) img.parentNode.removeChild(img);
+    document.querySelectorAll('.vsc-controller').forEach((d) => { if (d.parentNode) d.parentNode.removeChild(d); });
+    document.querySelectorAll('canvas').forEach((c) => { if (c.parentNode) c.parentNode.removeChild(c); });
+  }
+
+  // The default adapter must have routed through window.__VSC_gifuct.
+  if (!gifuctCalled) {
+    throw new Error(
+      'window.__VSC_gifuct.parseGIF was NOT called when no decoder was injected — default adapter not wired to gifuct'
+    );
+  }
+});
+
+runner.test('GifDecoder port: RED — adapter injection breaks when window.__VSC_gifuct used directly', () => {
+  // Structural test: confirms the gifuct path is now behind the adapter.
+  // If create() still calls window.__VSC_gifuct directly (bypassing the adapter),
+  // a test that nulls gifuct and injects a synthetic decoder would fail with
+  // "window.__VSC_gifuct is not a function" or similar. This test documents
+  // the expected behaviour: injecting a decoder isolates from gifuct.
+  //
+  // We verify this by checking the adapter factory function exists on GifController.
+  const hasAdapterFactory = typeof window.VSC.GifController._createGifuctAdapter === 'function';
+  if (!hasAdapterFactory) {
+    throw new Error(
+      '_createGifuctAdapter factory is not exposed on GifController — adapter port not implemented'
+    );
+  }
+});
+
+runner.test('GifDecoder port: _createGifuctAdapter() returns an object with a decode() method', () => {
+  const adapter = window.VSC.GifController._createGifuctAdapter();
+  if (!adapter || typeof adapter.decode !== 'function') {
+    throw new Error('_createGifuctAdapter() must return an object with a decode(buffer) method');
+  }
+});
+
+runner.test('GifDecoder port: re-decode path in _setupIntersectionObserver uses the adapter, not gifuct directly', () => {
+  // Structural: verifies the intersection observer re-decode path goes through the
+  // stored _decoder rather than calling window.__VSC_gifuct.parseGIF directly.
+  // We check by inspecting the source text of _setupIntersectionObserver — if it
+  // contains a direct window.__VSC_gifuct reference, the adapter seam is broken.
+  const srcText = window.VSC.GifController.prototype._setupIntersectionObserver.toString();
+  if (srcText.includes('window.__VSC_gifuct')) {
+    throw new Error(
+      '_setupIntersectionObserver still calls window.__VSC_gifuct directly — re-decode path must use this._decoder instead'
+    );
+  }
+});
+
+runner.test('GifDecoder port: SyntheticDecoder re-decode path restarts rAF without gifuct', async () => {
+  // Integration: with a SyntheticDecoder injected, the re-decode path inside
+  // _setupIntersectionObserver should work without window.__VSC_gifuct.
+  const { gc, img } = buildInstance();
+
+  // Replace the decoder with a synthetic one so the re-decode path doesn't need gifuct.
+  gc._decoder = makeSyntheticDecoder({ width: gc._gifWidth, height: gc._gifHeight });
+
+  // Disconnect existing observer.
+  if (gc._intersectionObserver) {
+    gc._intersectionObserver.disconnect();
+    gc._intersectionObserver = null;
+  }
+
+  let capturedCallback = null;
+  const origIO = global.IntersectionObserver;
+  global.IntersectionObserver = class {
+    constructor(cb) { capturedCallback = cb; }
+    observe() {}
+    disconnect() {}
+  };
+  try {
+    gc._setupIntersectionObserver();
+  } finally {
+    global.IntersectionObserver = origIO;
+  }
+
+  // Null gifuct so any direct call would throw.
+  const origGifuct = window.__VSC_gifuct;
+  window.__VSC_gifuct = null;
+
+  // Simulate visibility-evicted state.
+  gc._visibilityPaused = true;
+  gc._frames = null;
+  gc._rawBuffer = new ArrayBuffer(16);
+  gc._userPaused = false;
+
+  try {
+    capturedCallback([{ isIntersecting: true }]);
+  } finally {
+    window.__VSC_gifuct = origGifuct;
+  }
+
+  // _visibilityPaused should be cleared.
+  if (gc._visibilityPaused !== false) {
+    teardown({ gc, img });
+    throw new Error('Expected _visibilityPaused=false after re-decode with SyntheticDecoder');
+  }
+  // Frames should be populated (synthetic decoder returned them).
+  if (gc._frames === null) {
+    teardown({ gc, img });
+    throw new Error('Expected frames to be re-decoded via SyntheticDecoder');
+  }
+
+  teardown({ gc, img });
 });
 
 export default runner;

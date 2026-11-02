@@ -119,6 +119,23 @@ runner.test('ISOLATED-world injector block (injector.js) has match_about_blank:f
   );
 });
 
+runner.test('all content_scripts blocks explicitly set match_about_blank:false (no block may inject into about:blank)', () => {
+  // Chrome MV3 default is false when the key is absent, but explicit false is
+  // required so that adding a new block never silently enables about:blank
+  // injection.  This test catches any block that omits the key entirely.
+  const contentScripts = manifest.content_scripts ?? [];
+  assert.true(contentScripts.length > 0, 'manifest must have at least one content_scripts block');
+  for (const cs of contentScripts) {
+    assert.equal(
+      cs.match_about_blank,
+      false,
+      `content_scripts block (matches: ${JSON.stringify(cs.matches)}, world: ${JSON.stringify(cs.world)}) ` +
+        `must explicitly declare match_about_blank:false — absent key defaults to false in Chrome MV3 ` +
+        `but is invisible to reviewers and future agents`
+    );
+  }
+});
+
 runner.test('base-handler.js appears before all other site handler files in world:MAIN js array (regression guard)', () => {
   const contentScripts = manifest.content_scripts ?? [];
   const mainWorldEntry = contentScripts.find(

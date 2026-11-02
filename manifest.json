@@ -102,6 +102,7 @@
       "matches": [
         "https://www.netflix.com/*"
       ],
+      "match_about_blank": false,
       "world": "MAIN",
       "run_at": "document_end",
       "js": [

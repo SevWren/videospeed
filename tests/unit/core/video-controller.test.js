@@ -508,4 +508,241 @@ runner.test('dispatchControllerEvent does not throw even if window.dispatchEvent
   assert.equal(threw, false, 'dispatchControllerEvent must not propagate errors from dispatchEvent');
 });
 
+// ── T3: hover-to-activate (mouseenter/mouseleave + dwell timer) ──────────────
+
+// Helper: intercept global setTimeout/clearTimeout (used by production code running
+// in Node.js where bare setTimeout resolves to globalThis.setTimeout, not
+// window/dom.window.setTimeout).
+function makeFakeTimers() {
+  const pendingTimers = [];
+  const realSetTimeout = globalThis.setTimeout;
+  const realClearTimeout = globalThis.clearTimeout;
+
+  globalThis.setTimeout = (fn, ms) => {
+    // Reserve a real timer id so clearTimeout works; use a no-op real timer
+    const id = realSetTimeout(() => {}, 9_999_999);
+    pendingTimers.push({ id, fn, ms });
+    return id;
+  };
+  globalThis.clearTimeout = (id) => {
+    const idx = pendingTimers.findIndex((t) => t.id === id);
+    if (idx !== -1) {
+      pendingTimers.splice(idx, 1);
+    }
+    realClearTimeout(id);
+  };
+
+  return {
+    /** Fire all captured timers whose delay >= minMs */
+    advance(minMs) {
+      const toFire = pendingTimers.filter((t) => t.ms >= minMs).slice();
+      toFire.forEach((t) => {
+        const idx = pendingTimers.findIndex((p) => p.id === t.id);
+        if (idx !== -1) pendingTimers.splice(idx, 1);
+        t.fn();
+      });
+    },
+    restore() {
+      globalThis.setTimeout = realSetTimeout;
+      globalThis.clearTimeout = realClearTimeout;
+    },
+  };
+}
+
+runner.test(
+  'hoverActivatesVideoTarget:true — mouseenter after dwell calls setHoverTarget',
+  async () => {
+    // RED: mouseenter/mouseleave listeners and HOVER_DWELL_MS dwell do not exist yet.
+    const config = new window.VSC.VideoSpeedConfig();
+    await config.load();
+    config.settings.hoverActivatesVideoTarget = true;
+
+    const eventManager = new window.VSC.EventManager(config, null);
+    const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+    let setHoverTargetCalled = false;
+    let setHoverTargetArg = null;
+    const origSetHoverTarget = actionHandler.setHoverTarget.bind(actionHandler);
+    actionHandler.setHoverTarget = (div) => {
+      setHoverTargetCalled = true;
+      setHoverTargetArg = div;
+      origSetHoverTarget(div);
+    };
+
+    const mockVideo = createMockVideo();
+    mockDOM.container.appendChild(mockVideo);
+
+    const controller = new window.VSC.VideoController(mockVideo, null, config, actionHandler);
+
+    const timers = makeFakeTimers();
+    try {
+      controller.div.dispatchEvent(new Event('mouseenter', { bubbles: false }));
+      // Advance past HOVER_DWELL_MS (200ms)
+      timers.advance(200);
+
+      assert.true(setHoverTargetCalled, 'setHoverTarget must be called after dwell');
+      assert.equal(setHoverTargetArg, controller.div, 'setHoverTarget must receive controller.div');
+    } finally {
+      timers.restore();
+    }
+  }
+);
+
+runner.test(
+  'hoverActivatesVideoTarget:false — mouseenter does NOT call setHoverTarget',
+  async () => {
+    // RED: even with false the listener (which does not exist yet) would not guard correctly.
+    const config = new window.VSC.VideoSpeedConfig();
+    await config.load();
+    config.settings.hoverActivatesVideoTarget = false;
+
+    const eventManager = new window.VSC.EventManager(config, null);
+    const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+    let setHoverTargetCalled = false;
+    actionHandler.setHoverTarget = () => {
+      setHoverTargetCalled = true;
+    };
+
+    const mockVideo = createMockVideo();
+    mockDOM.container.appendChild(mockVideo);
+
+    const controller = new window.VSC.VideoController(mockVideo, null, config, actionHandler);
+
+    const timers = makeFakeTimers();
+    try {
+      controller.div.dispatchEvent(new Event('mouseenter', { bubbles: false }));
+      timers.advance(200);
+
+      assert.false(
+        setHoverTargetCalled,
+        'setHoverTarget must NOT be called when hoverActivatesVideoTarget is false'
+      );
+    } finally {
+      timers.restore();
+    }
+  }
+);
+
+runner.test(
+  'mouseleave before dwell completes cancels the timer — setHoverTarget not called',
+  async () => {
+    // RED: no mouseleave listener exists yet to cancel the pending dwell timer.
+    const config = new window.VSC.VideoSpeedConfig();
+    await config.load();
+    config.settings.hoverActivatesVideoTarget = true;
+
+    const eventManager = new window.VSC.EventManager(config, null);
+    const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+    let setHoverTargetCalled = false;
+    actionHandler.setHoverTarget = () => {
+      setHoverTargetCalled = true;
+    };
+
+    const mockVideo = createMockVideo();
+    mockDOM.container.appendChild(mockVideo);
+
+    const controller = new window.VSC.VideoController(mockVideo, null, config, actionHandler);
+
+    const timers = makeFakeTimers();
+    try {
+      // mouseenter starts dwell
+      controller.div.dispatchEvent(new Event('mouseenter', { bubbles: false }));
+      // mouseleave before dwell fires (< 200 ms elapsed)
+      controller.div.dispatchEvent(new Event('mouseleave', { bubbles: false }));
+      // Advance past 200 ms — timer was cancelled, so setHoverTarget must NOT fire
+      timers.advance(200);
+
+      assert.false(
+        setHoverTargetCalled,
+        'setHoverTarget must NOT be called when mouseleave fires before dwell completes'
+      );
+    } finally {
+      timers.restore();
+    }
+  }
+);
+
+runner.test(
+  'conditional focus steal: div.focus() called when !document.hasFocus()',
+  async () => {
+    // RED: no focus() call exists in setupEventHandlers yet.
+    const config = new window.VSC.VideoSpeedConfig();
+    await config.load();
+    config.settings.hoverActivatesVideoTarget = true;
+
+    const eventManager = new window.VSC.EventManager(config, null);
+    const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+    const mockVideo = createMockVideo();
+    mockDOM.container.appendChild(mockVideo);
+
+    const controller = new window.VSC.VideoController(mockVideo, null, config, actionHandler);
+
+    // Mock document.hasFocus to return false (page does not have focus)
+    const origHasFocus = document.hasFocus.bind(document);
+    document.hasFocus = () => false;
+
+    // Spy on div.focus
+    let focusCalled = false;
+    controller.div.focus = (opts) => {
+      focusCalled = true;
+      void opts;
+    };
+
+    const timers = makeFakeTimers();
+    try {
+      controller.div.dispatchEvent(new Event('mouseenter', { bubbles: false }));
+      timers.advance(200);
+
+      assert.true(focusCalled, 'div.focus() must be called when !document.hasFocus()');
+    } finally {
+      document.hasFocus = origHasFocus;
+      timers.restore();
+    }
+  }
+);
+
+runner.test(
+  'conditional focus steal: div.focus() NOT called when document.hasFocus() is true',
+  async () => {
+    // RED: no conditional focus logic exists yet.
+    const config = new window.VSC.VideoSpeedConfig();
+    await config.load();
+    config.settings.hoverActivatesVideoTarget = true;
+
+    const eventManager = new window.VSC.EventManager(config, null);
+    const actionHandler = new window.VSC.ActionHandler(config, eventManager);
+
+    const mockVideo = createMockVideo();
+    mockDOM.container.appendChild(mockVideo);
+
+    const controller = new window.VSC.VideoController(mockVideo, null, config, actionHandler);
+
+    // Mock document.hasFocus to return true (page already has focus)
+    const origHasFocus = document.hasFocus.bind(document);
+    document.hasFocus = () => true;
+
+    let focusCalled = false;
+    controller.div.focus = () => {
+      focusCalled = true;
+    };
+
+    const timers = makeFakeTimers();
+    try {
+      controller.div.dispatchEvent(new Event('mouseenter', { bubbles: false }));
+      timers.advance(200);
+
+      assert.false(
+        focusCalled,
+        'div.focus() must NOT be called when document.hasFocus() returns true'
+      );
+    } finally {
+      document.hasFocus = origHasFocus;
+      timers.restore();
+    }
+  }
+);
+
 export { runner as videoControllerTestRunner };

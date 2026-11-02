@@ -112,6 +112,10 @@ class VideoController {
     // Create wrapper element
     const wrapper = document.createElement('div');
 
+    // tabindex=-1 makes the shadow host programmatically focusable (required for
+    // conditional focus steal in the hover-to-activate path).
+    wrapper.setAttribute('tabindex', '-1');
+
     // Apply all CSS classes at once to prevent race condition flash
     const cssClasses = ['vsc-controller'];
 
@@ -252,6 +256,34 @@ class VideoController {
 
     this.video.addEventListener('play', this.handlePlay);
     this.video.addEventListener('seeked', this.handleSeek);
+
+    // Hover-to-activate: mouseenter on the shadow host sets this controller as the
+    // keyboard hotkey target after a HOVER_DWELL_MS dwell time. mouseleave cancels
+    // a pending dwell but does NOT clear the active target (sticky hover).
+    // Listeners are only registered when the feature is enabled.
+    this._hoverDwellTimer = null;
+
+    if (this.config.settings.hoverActivatesVideoTarget) {
+      this.div.addEventListener('mouseenter', () => {
+        this._hoverDwellTimer = setTimeout(() => {
+          this._hoverDwellTimer = null;
+          this.actionHandler.setHoverTarget(this.div);
+          // Conditional focus steal: only steal focus if the page does not already have it.
+          // This restores keyboard event delivery when the browser address bar has focus.
+          if (!document.hasFocus()) {
+            this.div.focus({ preventScroll: true });
+          }
+        }, window.VSC.Constants.HOVER_DWELL_MS);
+      });
+
+      this.div.addEventListener('mouseleave', () => {
+        if (this._hoverDwellTimer !== null) {
+          clearTimeout(this._hoverDwellTimer);
+          this._hoverDwellTimer = null;
+        }
+        // Intentionally NOT clearing actionHandler._hoverTargetController — sticky hover
+      });
+    }
   }
 
   /**
@@ -286,6 +318,12 @@ class VideoController {
    */
   remove() {
     window.VSC.logger.debug('Removing VideoController');
+
+    // Cancel any pending hover dwell timer to prevent stale setHoverTarget calls
+    if (this._hoverDwellTimer !== null) {
+      clearTimeout(this._hoverDwellTimer);
+      this._hoverDwellTimer = null;
+    }
 
     // Remove DOM element
     if (this.div && this.div.parentNode) {

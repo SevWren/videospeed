@@ -2112,4 +2112,308 @@ runner.test('_fetchGifBytes: non-gif content-type returns null', async () => {
   }
 });
 
+// ─── T4: GifController hover (mouseenter/mouseleave with dwell) ───────────────
+// These tests verify the hover-to-activate feature on gc.div (the GIF overlay
+// shadow host). hoverActivatesGifTarget defaults to false (opt-in, unlike
+// video). The implementation uses a HOVER_DWELL_MS dwell timer before calling
+// actionHandler.setHoverTarget(gc.div).
+
+/**
+ * Build a minimal GifController instance wired with a mock actionHandler
+ * that records setHoverTarget calls. Mirrors buildInstance() but injects
+ * an actionHandler and exposes the config for per-test setting overrides.
+ */
+function buildHoverInstance(gifTargetEnabled) {
+  const img = document.createElement('img');
+  img.src = 'https://example.com/hover-test.gif';
+  document.body.appendChild(img);
+
+  const config = {
+    settings: {
+      controlGifs: true,
+      lastGifSpeed: 1.0,
+      startHidden: false,
+      controllerOpacity: 0.3,
+      controllerButtonSize: 14,
+      hoverActivatesGifTarget: gifTargetEnabled,
+    },
+    addGifElement: () => {},
+    removeGifElement: () => {},
+    getGifElements: () => [],
+  };
+
+  let hoverTargetArg = undefined;
+  const actionHandler = {
+    setHoverTarget: (div) => { hoverTargetArg = div; },
+    _hoverTargetCallCount: 0,
+  };
+  // Wrap to count calls
+  const origSet = actionHandler.setHoverTarget.bind(actionHandler);
+  actionHandler.setHoverTarget = (div) => {
+    actionHandler._hoverTargetCallCount++;
+    hoverTargetArg = div;
+  };
+
+  const gc = new window.VSC.GifController(img, null, config, actionHandler);
+
+  // Set up minimal instance fields
+  gc._gifWidth = 50;
+  gc._gifHeight = 50;
+  gc._speed = 1.0;
+
+  // Create and attach the controller div (what _initializeControls() would do)
+  const div = document.createElement('div');
+  div.classList.add('vsc-controller');
+  document.body.appendChild(div);
+  gc.div = div;
+
+  // Wire the hover listeners by calling _initializeControls() via a minimal
+  // stub of ShadowDOMManager and ControlsManager.
+  const origShadow = window.VSC.ShadowDOMManager;
+  const origControls = window.VSC.ControlsManager;
+  window.VSC.ShadowDOMManager = {
+    createShadowDOM: (wrapper) => {
+      try { return wrapper.attachShadow({ mode: 'open' }); } catch (_) { return {}; }
+    },
+  };
+  window.VSC.ControlsManager = class {
+    constructor() {}
+    setupControlEvents() {}
+  };
+  // Reset div before _initializeControls sets it
+  if (gc.div && gc.div.parentNode) gc.div.parentNode.removeChild(gc.div);
+  gc.div = null;
+  gc._canvas = document.createElement('canvas');
+  document.body.appendChild(gc._canvas);
+  try {
+    gc._initializeControls();
+  } finally {
+    window.VSC.ShadowDOMManager = origShadow;
+    window.VSC.ControlsManager = origControls;
+  }
+
+  return { gc, img, actionHandler, getHoverTarget: () => hoverTargetArg };
+}
+
+function teardownHover({ gc, img }) {
+  try {
+    if (gc._hoverDwellTimer !== null && gc._hoverDwellTimer !== undefined) {
+      clearTimeout(gc._hoverDwellTimer);
+      gc._hoverDwellTimer = null;
+    }
+  } catch (_) {}
+  document.querySelectorAll('.vsc-controller').forEach((d) => {
+    if (d.parentNode) d.parentNode.removeChild(d);
+  });
+  document.querySelectorAll('canvas').forEach((c) => {
+    if (c.parentNode) c.parentNode.removeChild(c);
+  });
+  if (img && img.parentNode) img.parentNode.removeChild(img);
+}
+
+// T4-1: hoverActivatesGifTarget:false (default) — mouseenter does NOT call setHoverTarget
+runner.test('T4: mouseenter does NOT call setHoverTarget when hoverActivatesGifTarget=false', (done) => {
+  const { gc, img, actionHandler } = buildHoverInstance(false);
+  try {
+    if (!gc.div) { teardownHover({ gc, img }); return; }
+
+    // Intercept setTimeout to capture the dwell timer callback
+    let dwellFn = null;
+    const origSetTimeout = global.setTimeout;
+    global.setTimeout = (fn, delay) => {
+      if (typeof delay === 'number' && delay === window.VSC.Constants.HOVER_DWELL_MS) {
+        dwellFn = fn;
+        return 12345;
+      }
+      return origSetTimeout(fn, delay);
+    };
+
+    gc.div.dispatchEvent(new Event('mouseenter'));
+    global.setTimeout = origSetTimeout;
+
+    // Advance dwell by invoking the captured callback (if any)
+    if (dwellFn) { dwellFn(); }
+
+    // With hoverActivatesGifTarget=false, setHoverTarget must NOT have been called
+    if (actionHandler._hoverTargetCallCount !== 0) {
+      teardownHover({ gc, img });
+      throw new Error(`Expected setHoverTarget NOT called (count=0), got ${actionHandler._hoverTargetCallCount}`);
+    }
+  } finally {
+    teardownHover({ gc, img });
+  }
+});
+
+// T4-2: hoverActivatesGifTarget:true — mouseenter after dwell calls setHoverTarget(gc.div)
+runner.test('T4: mouseenter after dwell calls setHoverTarget(gc.div) when hoverActivatesGifTarget=true', () => {
+  const { gc, img, actionHandler, getHoverTarget } = buildHoverInstance(true);
+  try {
+    if (!gc.div) { teardownHover({ gc, img }); return; }
+
+    let dwellFn = null;
+    const origSetTimeout = global.setTimeout;
+    global.setTimeout = (fn, delay) => {
+      if (typeof delay === 'number' && delay === window.VSC.Constants.HOVER_DWELL_MS) {
+        dwellFn = fn;
+        return 12346;
+      }
+      return origSetTimeout(fn, delay);
+    };
+
+    gc.div.dispatchEvent(new Event('mouseenter'));
+    global.setTimeout = origSetTimeout;
+
+    if (!dwellFn) {
+      teardownHover({ gc, img });
+      throw new Error('Expected dwell setTimeout to be registered on mouseenter (hoverActivatesGifTarget=true)');
+    }
+
+    // Invoke the dwell callback
+    dwellFn();
+
+    if (actionHandler._hoverTargetCallCount === 0) {
+      teardownHover({ gc, img });
+      throw new Error('Expected setHoverTarget to be called after dwell elapsed');
+    }
+    if (getHoverTarget() !== gc.div) {
+      teardownHover({ gc, img });
+      throw new Error(`Expected setHoverTarget called with gc.div, got ${getHoverTarget()}`);
+    }
+  } finally {
+    teardownHover({ gc, img });
+  }
+});
+
+// T4-3: mouseleave cancels pending dwell
+runner.test('T4: mouseleave cancels pending dwell — setHoverTarget NOT called', () => {
+  const { gc, img, actionHandler } = buildHoverInstance(true);
+  try {
+    if (!gc.div) { teardownHover({ gc, img }); return; }
+
+    let capturedTimerId = null;
+    let timerCancelled = false;
+    const origSetTimeout = global.setTimeout;
+    const origClearTimeout = global.clearTimeout;
+
+    global.setTimeout = (fn, delay) => {
+      if (typeof delay === 'number' && delay === window.VSC.Constants.HOVER_DWELL_MS) {
+        capturedTimerId = origSetTimeout(fn, 999999); // long delay so it won't fire
+        return capturedTimerId;
+      }
+      return origSetTimeout(fn, delay);
+    };
+    global.clearTimeout = (id) => {
+      if (id === capturedTimerId) { timerCancelled = true; }
+      origClearTimeout(id);
+    };
+
+    gc.div.dispatchEvent(new Event('mouseenter'));
+    // mouseleave before dwell fires
+    gc.div.dispatchEvent(new Event('mouseleave'));
+
+    global.setTimeout = origSetTimeout;
+    global.clearTimeout = origClearTimeout;
+
+    // Clean up the long-delay timer
+    if (capturedTimerId !== null) { origClearTimeout(capturedTimerId); }
+
+    if (!timerCancelled) {
+      teardownHover({ gc, img });
+      throw new Error('Expected mouseleave to cancel the pending dwell timer');
+    }
+    if (actionHandler._hoverTargetCallCount !== 0) {
+      teardownHover({ gc, img });
+      throw new Error(`Expected setHoverTarget NOT called after mouseleave, got count=${actionHandler._hoverTargetCallCount}`);
+    }
+  } finally {
+    teardownHover({ gc, img });
+  }
+});
+
+// T4-4: Conditional focus steal when !document.hasFocus()
+runner.test('T4: div.focus() called when !document.hasFocus() after dwell', () => {
+  const { gc, img } = buildHoverInstance(true);
+  const origHasFocus = document.hasFocus.bind(document);
+  try {
+    if (!gc.div) { teardownHover({ gc, img }); return; }
+
+    let focusCalled = false;
+    gc.div.focus = () => { focusCalled = true; };
+
+    let dwellFn = null;
+    const origSetTimeout = global.setTimeout;
+    global.setTimeout = (fn, delay) => {
+      if (typeof delay === 'number' && delay === window.VSC.Constants.HOVER_DWELL_MS) {
+        dwellFn = fn;
+        return 12347;
+      }
+      return origSetTimeout(fn, delay);
+    };
+
+    gc.div.dispatchEvent(new Event('mouseenter'));
+    global.setTimeout = origSetTimeout;
+
+    if (!dwellFn) {
+      throw new Error('Expected dwell setTimeout to be registered on mouseenter');
+    }
+
+    // Mock document.hasFocus() to return false BEFORE invoking the dwell callback
+    document.hasFocus = () => false;
+    dwellFn();
+    document.hasFocus = origHasFocus;
+
+    if (!focusCalled) {
+      throw new Error('Expected div.focus() called when !document.hasFocus()');
+    }
+  } catch (err) {
+    document.hasFocus = origHasFocus;
+    teardownHover({ gc, img });
+    throw err;
+  }
+  teardownHover({ gc, img });
+});
+
+// T4-5: No focus steal when document.hasFocus() is true
+runner.test('T4: div.focus() NOT called when document.hasFocus() is true', () => {
+  const { gc, img } = buildHoverInstance(true);
+  const origHasFocus = document.hasFocus.bind(document);
+  try {
+    if (!gc.div) { teardownHover({ gc, img }); return; }
+
+    let focusCalled = false;
+    gc.div.focus = () => { focusCalled = true; };
+
+    let dwellFn = null;
+    const origSetTimeout = global.setTimeout;
+    global.setTimeout = (fn, delay) => {
+      if (typeof delay === 'number' && delay === window.VSC.Constants.HOVER_DWELL_MS) {
+        dwellFn = fn;
+        return 12348;
+      }
+      return origSetTimeout(fn, delay);
+    };
+
+    gc.div.dispatchEvent(new Event('mouseenter'));
+    global.setTimeout = origSetTimeout;
+
+    if (!dwellFn) {
+      throw new Error('Expected dwell setTimeout to be registered on mouseenter');
+    }
+
+    // Mock document.hasFocus() to return true BEFORE invoking the dwell callback
+    document.hasFocus = () => true;
+    dwellFn();
+    document.hasFocus = origHasFocus;
+
+    if (focusCalled) {
+      throw new Error('Expected div.focus() NOT called when document.hasFocus() is true');
+    }
+  } catch (err) {
+    document.hasFocus = origHasFocus;
+    teardownHover({ gc, img });
+    throw err;
+  }
+  teardownHover({ gc, img });
+});
+
 export default runner;

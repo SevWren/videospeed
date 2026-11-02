@@ -82,3 +82,20 @@ caught across multiple review sessions.
 
 **Review rule:** Any PR that defines a constant used by only one listener or callback in
 the same scope should be flagged: verify there is exactly one owner.
+
+## CS-6: Dwell-timer tests must intercept `globalThis.setTimeout`, not `window.setTimeout`
+
+In JSDOM, `window.setTimeout` and `globalThis.setTimeout` are two different objects.
+Production browser code that calls `setTimeout(fn, ms)` at module scope (no explicit
+`window.` prefix) resolves to `globalThis.setTimeout` in JSDOM — not `window.setTimeout`.
+A test that replaces `window.setTimeout` will not capture those timers, so the test will
+silently fail to exercise the dwell path.
+
+**Why:** Discovered during T3 of the hover-to-activate feature. The `makeFakeTimers()`
+helper in `tests/integration/hover-activation.test.js` intercepts `globalThis.setTimeout`
+and `globalThis.clearTimeout` explicitly. Any test for a dwell timer or debounce timer
+must follow this pattern.
+
+**Review rule:** Any test that stubs `setTimeout`/`clearTimeout` must target `globalThis`,
+not `window`. A test that replaces only `window.setTimeout` and asserts a timer-dependent
+behavior fails review.

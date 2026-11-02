@@ -99,3 +99,17 @@ must follow this pattern.
 **Review rule:** Any test that stubs `setTimeout`/`clearTimeout` must target `globalThis`,
 not `window`. A test that replaces only `window.setTimeout` and asserts a timer-dependent
 behavior fails review.
+
+## CS-7: Constructor parameters beyond 3 must use options objects
+
+When a constructor or factory function requires more than 3 parameters, use a single options
+object instead of positional params. This prevents callers from miscounting arguments, makes
+IDE autocompletion useful, and allows future parameter additions without a breaking API change.
+
+**Why:** `VideoMutationObserver`'s 6-positional-parameter constructor was identified as a
+depth-reducing interface choice in the codebase-design session. A caller passing 6 positional
+arguments has no local documentation of which argument is which; an options object makes each
+parameter self-describing at the call site.
+
+**Review rule:** Any PR adding a constructor or function with more than 3 positional parameters
+must either justify the choice in the PR body or use an options object.

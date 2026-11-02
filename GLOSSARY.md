@@ -182,8 +182,13 @@ The operation of discarding the active Site Handler and forcing re-detection on 
 _Avoid_: handler reset, handler reinit
 
 **Controller Positioning**:
-The object returned by `getControllerPosition()`, specifying where a controller's shadow host is inserted: `insertionPoint` (the anchor node), `insertionMethod` (`'firstChild'`, `'beforeParent'`, or `'afterParent'`), and `targetParent` (the logical parent). Site handlers override this to escape site-specific overlay structures.
-_Avoid_: positioning info, insertion config
+The return value of `BaseSiteHandler.getPositioning()`. An object with three fields:
+- `insertionPoint`: the DOM element relative to which the controller is inserted
+- `insertionMethod`: `'firstChild'` | `'beforeParent'` | `'afterParent'`
+- `targetParent`: the element that becomes the controller's parent node
+
+Site handlers override `getPositioning()` to escape site-specific overlay structures.
+_Avoid_: positioning object, insert config, placement data, positioning info, insertion config
 
 **Controller Parent**:
 The DOM element selected by `findControllerParent()` as the insertion ancestor for the controller's shadow host. Determined by the active Site Handler's Controller Positioning.
@@ -192,6 +197,18 @@ _Avoid_: parent node, container element
 **Custom Seek**:
 A Site Handler override of seek behavior that uses a site-native mechanism instead of direct `video.currentTime` assignment. Currently only `NetflixHandler`, which fires `window.postMessage({ action: 'videospeed-seek', seekMs })` because Netflix's player intercepts direct time writes. See ADR-0004.
 _Avoid_: postMessage seek, native seek override
+
+**GifDecoder**:
+The port interface for decoding an `ArrayBuffer` of raw GIF bytes into frame data. The production adapter wraps `gifuct-js` (exposed as `window.__VSC_gifuct`); the test adapter returns synthetic frames without parsing real GIF binary data.
+_Avoid_: gif parser, frame decoder, gif reader
+
+**MediaPipeline**:
+The proposed future module that will own media detection, observer setup, and scan scheduling behind a single `start(document, onMediaFound, onMediaRemoved)` interface. Not yet implemented; recorded here as the architectural destination for the currently scattered detection logic across `MediaElementObserver`, `VideoMutationObserver`, and the scan calls in `VideoSpeedExtension`.
+_Avoid_: media scanner, observer pipeline, detection pipeline
+
+**HOVER_EXCLUDED_ACTIONS**:
+The named set of actions (`mark`, `jump`) that bypass Hover Target routing and broadcast to all media elements when triggered via keyboard. When a keyboard shortcut fires and the only resolved target would be the Hover Target (no controller button was clicked), actions in this set ignore the Hover Target entirely. A click-derived target is not affected — the exclusion applies only to the hover-derived path. See ADR-0010.
+_Avoid_: broadcast actions, hover bypass actions, excluded hover actions
 
 ### GIF System
 
